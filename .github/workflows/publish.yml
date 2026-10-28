@@ -1,0 +1,85 @@
+name: Publish plugin catalog
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: plugin-distribution
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: Javis603/token-monitor
+          ref: 1423800730ae4dc083a046edd19efa36ff907e64
+          path: host
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install host validation dependencies
+        working-directory: host
+        run: npm ci --ignore-scripts
+      - name: Verify and build
+        working-directory: source
+        env:
+          PLUGIN_REPOSITORY: ${{ github.repository }}
+        run: |
+          npm test
+          npm run check -- --host ../host
+          npm run build -- --host ../host
+          npm run catalog -- --host ../host --app-range '>=0.81.0' --base-url "https://raw.githubusercontent.com/${PLUGIN_REPOSITORY}/dist/" --repository "https://github.com/${PLUGIN_REPOSITORY}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-distribution
+          path: source/dist/release/
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-distribution
+          path: dist/release
+      - name: Publish verified catalog and immutable packages
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$SOURCE_SHA" ]; then
+            echo 'A newer source revision exists; its run will publish instead.'
+            exit 0
+          fi
+          git ls-remote --heads origin refs/heads/dist > /tmp/plugin-dist-ref
+          if [ -s /tmp/plugin-dist-ref ]; then
+            git fetch origin refs/heads/dist:refs/remotes/origin/dist
+            git worktree add --detach _local/publish origin/dist
+          else
+            git worktree add --detach --no-checkout _local/publish HEAD
+            git -C _local/publish switch --orphan plugin-dist-bootstrap
+          fi
+          node scripts/distribution.mjs --source dist/release --target _local/publish
+          git -C _local/publish add catalog.json '*.tmplugin'
+          if git -C _local/publish diff --cached --quiet; then
+            echo 'Distribution already matches this source.'
+            exit 0
+          fi
+          git -C _local/publish -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Publish plugins from ${SOURCE_SHA}"
+          git -C _local/publish push origin HEAD:refs/heads/dist
