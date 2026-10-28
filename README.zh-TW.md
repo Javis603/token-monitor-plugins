@@ -14,6 +14,7 @@
 
 | 外掛 | 說明 | 版本 |
 | --- | --- | --- |
+| [Magpie Routes](plugins/magpie-routes/README.zh-TW.md) | 查看本機即時路由與上下文。 | `0.1.0` |
 
 ## 安裝
 
@@ -33,7 +34,8 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 - [維護與發布](docs/releasing.md)
 - [驗證範圍](docs/verification.md)
+- [版本記錄](plugins/magpie-routes/CHANGELOG.zh-TW.md)
 
 ## 授權
 
-[MIT](LICENSE).
+原創程式與文件採 [MIT](LICENSE)。第三方授權與來源見 [NOTICE](NOTICE.md)。

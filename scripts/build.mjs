@@ -6,12 +6,16 @@ import { packageChangelog } from './changelog.mjs';
 const host = option('--host');
 if (!host) throw Error('Usage: node scripts/build.mjs --host <Token Monitor checkout> [--local-only]');
 const local = process.argv.includes('--local-only');
+// Magpie Routes requires the real headerActions host contract, not a layout fallback.
+if (!fs.readFileSync(path.resolve(host, 'src/electron/renderer/pluginUi.js'), 'utf8').includes('headerActions')) {
+  throw Error('This Token Monitor checkout does not provide headerActions required by Magpie Routes.');
+}
 const require = createRequire(import.meta.url);
 const { packageDirectory } = require(path.resolve(host, 'src/electron/plugins/package.js'));
 const output = path.join(root, 'dist', local ? 'local-only' : 'release');
 fs.mkdirSync(output, { recursive: true });
 const packages = ids.map(id => {
-  const m = manifest(id), pkg = packageDirectory(path.join(root, 'plugins', id));
+  const m = manifest(id), pkg = packageDirectory(path.join(root, 'plugins', id), { checkCompatibility: false });
   packageChangelog(pkg.files, m.version);
   const filename = `${id}-${m.version}.tmplugin`, file = path.join(output, filename);
   if (fs.existsSync(file)) throw Error(`Refusing to overwrite ${filename}; use a new version or a fresh output directory.`);

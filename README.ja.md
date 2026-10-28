@@ -14,6 +14,7 @@
 
 | プラグイン | 説明 | バージョン |
 | --- | --- | --- |
+| [Magpie Routes](plugins/magpie-routes/README.ja.md) | ローカルのリアルタイムルーティングとコンテキストを表示。 | `0.1.0` |
 
 ## インストール
 
@@ -33,7 +34,8 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 - [保守と公開](docs/releasing.md)
 - [検証範囲](docs/verification.md)
+- [変更履歴](plugins/magpie-routes/CHANGELOG.ja.md)
 
 ## ライセンス
 
-[MIT](LICENSE).
+独自のコードと文書は [MIT](LICENSE) です。第三者のライセンスと出典は [NOTICE](NOTICE.md) に記載しています。

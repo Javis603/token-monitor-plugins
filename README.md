@@ -14,6 +14,7 @@ Community-maintained plugins for [Token Monitor](https://github.com/Javis603/tok
 
 | Plugin | Description | Version |
 | --- | --- | --- |
+| [Magpie Routes](plugins/magpie-routes/README.md) | Live local routing and context views. | `0.1.0` |
 
 ## Installation
 
@@ -33,7 +34,8 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 - [Maintenance and publishing](docs/releasing.md)
 - [Verification scope](docs/verification.md)
+- [Changelog](plugins/magpie-routes/CHANGELOG.md)
 
 ## License
 
-[MIT](LICENSE).
+Original code and documentation use [MIT](LICENSE). Third-party licenses and attribution are listed in [NOTICE](NOTICE.md).

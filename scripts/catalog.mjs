@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { root, ids, manifest, option } from './common.mjs';
+import { CHANGELOG_FILES } from './changelog.mjs';
 import { packageChangelog } from './changelog.mjs';
 const base = option('--base-url'), repository = option('--repository'), host = option('--host'), appRange = option('--app-range');
 if (!base || !repository || !host || !appRange) throw Error('Supply --host <Token Monitor checkout>, tested --app-range <SemVer range>, real --base-url <direct HTTPS package directory> and --repository <GitHub repository URL>. No endpoint is configured by default.');
@@ -23,8 +24,10 @@ const plugins = ids.map(id => {
   if (sha256 !== entry.sha256) throw Error(`${id}: package changed after build`);
   const pkg = parsePackage(bytes, { checkCompatibility: false });
   if (pkg.manifest.id !== id || pkg.manifest.version !== m.version) throw Error(`${id}: package identity/version does not match`);
+  if (m.engines?.tokenMonitor !== appRange) throw Error(`${id}: catalog range must match the packaged manifest`);
+  const readmePaths = Object.fromEntries(Object.entries(CHANGELOG_FILES).map(([locale, file]) => [locale, `plugins/${id}/${file.replace('CHANGELOG', 'README')}`]));
   const changelog = packageChangelog(pkg.files, m.version);
-  return { id, name: m.name, description: m.description, author: m.author, identityIcon: m.identityIcon, repository,
+  return { id, name: m.name, description: m.description, author: m.author, identityIcon: m.identityIcon, repository, readmePaths,
     versions: [{ version: m.version, changelog, engines: { tokenMonitor: appRange }, url: new URL(entry.filename, url).href, sha256, types: ['widget','page'] }] };
 });
 const index = { format: 1, title: { en: 'Token Monitor Community', 'zh-TW': 'Token Monitor 社群' }, plugins };

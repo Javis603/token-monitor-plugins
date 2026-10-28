@@ -14,6 +14,7 @@
 
 | 플러그인 | 설명 | 버전 |
 | --- | --- | --- |
+| [Magpie Routes](plugins/magpie-routes/README.ko.md) | 로컬 실시간 라우팅과 컨텍스트 보기. | `0.1.0` |
 
 ## 설치
 
@@ -33,7 +34,8 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 - [유지 관리 및 배포](docs/releasing.md)
 - [검증 범위](docs/verification.md)
+- [변경 기록](plugins/magpie-routes/CHANGELOG.ko.md)
 
 ## 라이선스
 
-[MIT](LICENSE).
+원본 코드와 문서는 [MIT](LICENSE)로 제공됩니다. 타사 라이선스와 출처는 [NOTICE](NOTICE.md)에 있습니다.

@@ -14,6 +14,7 @@ Plugins mantidos pela comunidade para o [Token Monitor](https://github.com/Javis
 
 | Plugin | Descrição | Versão |
 | --- | --- | --- |
+| [Magpie Routes](plugins/magpie-routes/README.pt-BR.md) | Visualizações locais de roteamento e contexto em tempo real. | `0.1.0` |
 
 ## Instalação
 
@@ -33,7 +34,8 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 - [Manutenção e publicação](docs/releasing.md)
 - [Escopo de verificação](docs/verification.md)
+- [Histórico de alterações](plugins/magpie-routes/CHANGELOG.pt-BR.md)
 
 ## Licença
 
-[MIT](LICENSE).
+Código e documentação originais usam [MIT](LICENSE). As licenças e atribuições de terceiros estão em [NOTICE](NOTICE.md).

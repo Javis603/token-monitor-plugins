@@ -25,3 +25,8 @@ test('reads all localized summaries from packaged bytes and fails on missing or 
   files['CHANGELOG.zh-TW.md'] = Buffer.from([255]);
   assert.throws(() => packageChangelog(files, '0.1.0'), /encoded data/);
 });
+test('the shipped plugin contains a complete 0.1.0 summary for every README language', () => {
+  const root = new URL('../plugins/magpie-routes/', import.meta.url);
+  const files = Object.fromEntries(Object.values(CHANGELOG_FILES).map(name => [name, fs.readFileSync(new URL(name, root))]));
+  assert.equal(Object.keys(packageChangelog(files, '0.1.0')).length, 6);
+});
