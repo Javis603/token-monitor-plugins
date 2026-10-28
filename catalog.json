@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Token Monitor Community",
+    "zh-TW": "Token Monitor 社群"
+  },
+  "plugins": [
+    {
+      "id": "magpie-routes",
+      "name": {
+        "en": "Magpie Routes",
+        "zh-TW": "Magpie 路由",
+        "zh-CN": "Magpie 路由"
+      },
+      "description": {
+        "en": "Live Magpie routing, context and request details in the main App, Notch and Dock.",
+        "zh-TW": "在主 App、Notch 與 Dock 查看 Magpie 即時路由、上下文及請求詳情。",
+        "zh-CN": "在主 App、Notch 与 Dock 查看 Magpie 实时路由、上下文及请求详情。"
+      },
+      "author": "Javis603",
+      "identityIcon": "data:image/png;base64,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",
+      "repository": "https://github.com/Javis603/token-monitor-plugins",
+      "readmePaths": {
+        "en": "plugins/magpie-routes/README.md",
+        "zh-CN": "plugins/magpie-routes/README.zh-CN.md",
+        "zh-TW": "plugins/magpie-routes/README.zh-TW.md",
+        "ko": "plugins/magpie-routes/README.ko.md",
+        "ja": "plugins/magpie-routes/README.ja.md",
+        "pt-BR": "plugins/magpie-routes/README.pt-BR.md"
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "changelog": {
+            "en": "Initial release: live Magpie routing, context summaries and recent requests in the main page, Notch and Edge Dock. Account masking is shared across views. Supports English, Traditional Chinese and Simplified Chinese.",
+            "zh-CN": "首次发布：在主页面、刘海面板 和 侧边栏 查看 Magpie 实时路由、上下文摘要及近期请求。账号打码同步各个界面，支持英文、繁体中文及简体中文。",
+            "zh-TW": "首次發布：在主頁、瀏海面板 與 側邊欄 查看 Magpie 即時路由、上下文摘要及近期請求。帳號打碼同步各個介面，支援英文、繁體中文與簡體中文。",
+            "ko": "첫 출시: 메인 페이지, 노치 패널, 가장자리 도크에서 Magpie 실시간 라우팅, 컨텍스트 요약 및 최근 요청을 표시합니다. 계정 가리기는 모든 보기에 적용됩니다. 영어와 번체 및 간체 중국어를 지원합니다.",
+            "ja": "初回リリース。メインページ、ノッチパネル、エッジドック に Magpie のリアルタイムルーティング、コンテキスト概要、最近のリクエストを表示します。アカウント名のマスク設定を各ビューで共有し、英語、繁体字、簡体字に対応します。",
+            "pt-BR": "Primeiro lançamento: roteamento do Magpie em tempo real, resumos de contexto e solicitações recentes na página principal, no Painel do notch e no Edge Dock. A ocultação das contas é compartilhada entre as visualizações. Suporte a inglês e chinês tradicional/simplificado."
+          },
+          "engines": {
+            "tokenMonitor": ">=0.81.0"
+          },
+          "url": "https://raw.githubusercontent.com/Javis603/token-monitor-plugins/dist/magpie-routes-0.1.0.tmplugin",
+          "sha256": "199c56ccdd8ab6f82365c6b40882426b27be81ae0e0c7f358b692e57a90ae03f",
+          "types": [
+            "widget",
+            "page"
+          ]
+        }
+      ]
+    }
+  ]
+}
