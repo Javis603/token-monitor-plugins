@@ -1,0 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { root, ids, manifest, option } from './common.mjs';
+import { packageChangelog } from './changelog.mjs';
+const host = option('--host');
+if (!host) throw Error('Usage: node scripts/build.mjs --host <Token Monitor checkout> [--local-only]');
+const local = process.argv.includes('--local-only');
+const require = createRequire(import.meta.url);
+const { packageDirectory } = require(path.resolve(host, 'src/electron/plugins/package.js'));
+const output = path.join(root, 'dist', local ? 'local-only' : 'release');
+fs.mkdirSync(output, { recursive: true });
+const packages = ids.map(id => {
+  const m = manifest(id), pkg = packageDirectory(path.join(root, 'plugins', id));
+  packageChangelog(pkg.files, m.version);
+  const filename = `${id}-${m.version}.tmplugin`, file = path.join(output, filename);
+  if (fs.existsSync(file)) throw Error(`Refusing to overwrite ${filename}; use a new version or a fresh output directory.`);
+  return { pkg, file, entry: { id, version: m.version, filename, sha256: pkg.hash } };
+});
+for (const { pkg, file } of packages) fs.writeFileSync(file, pkg.bytes, { flag: 'wx' });
+fs.writeFileSync(path.join(output, 'packages.json'), JSON.stringify({ localOnly: local, packages: packages.map(p => p.entry) }, null, 2) + '\n', { flag: 'wx' });
+console.log(`Built ${packages.length} ${local ? 'LOCAL-ONLY, not for redistribution' : 'release'} packages in ${path.relative(root, output)}`);
