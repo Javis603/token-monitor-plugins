@@ -1615,3 +1615,94 @@ test('antigravity-account-ledger documentation does not advertise attribution co
     }
   }
 });
+
+test('antigravity-account-ledger falls back to consumed Gemini windows when the Argon quota is unconsumed', (t) => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-argon-fallback-'));
+  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+
+  const resetTime = '2026-10-31T11:13:09Z';
+  const callTs = Date.parse(resetTime) - 2 * 86400_000;
+  const windows = backend.buildQuotaAttributionWindows([
+    {
+      email: 'argon@example.com',
+      created_at: 1790000000,
+      last_used: 1793000000,
+      quota: {
+        quota_groups: [{
+          display_name: 'Gemini 4 Argon',
+          buckets: [{ bucket_id: 'argon-weekly', window: 'weekly', remaining_fraction: 1.0, reset_time: resetTime }]
+        }]
+      }
+    },
+    {
+      email: 'gemini@example.com',
+      created_at: 1790000000,
+      last_used: 1793000000,
+      quota: {
+        quota_groups: [{
+          display_name: 'Gemini',
+          buckets: [{ bucket_id: 'gemini-weekly', window: 'weekly', remaining_fraction: 0.4, reset_time: resetTime }]
+        }]
+      }
+    }
+  ], { homeDir: tmpHome });
+
+  assert.equal(windows['argon-weekly'].length, 1);
+  assert.equal(windows['argon-weekly'][0].consumed, false);
+  assert.equal(windows['gemini-weekly'][0].consumed, true);
+
+  const attribution = backend.attributeCallRecord({
+    timestampMs: callTs,
+    model: 'gemini-4-argon'
+  }, { ledger: backend.createDefaultLedger('2026-10-01T00:00:00Z'), quotaWindows: windows });
+  assert.equal(attribution.email, 'gemini@example.com');
+  assert.equal(attribution.source, 'quota_anchor');
+});
+
+test('antigravity-account-ledger compares session activation times as epochs before reusing day allocations', () => {
+  const ledger = backend.createDefaultLedger('2026-10-27T00:00:00+08:00');
+  const metrics = {
+    totalTokens: 300,
+    costUsd: 0.3,
+    inputTokens: 300,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    reasoningTokens: 0,
+    models: {
+      'claude-sonnet-4-6': {
+        tokens: 300,
+        costUsd: 0.3,
+        inputTokens: 300,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0
+      }
+    }
+  };
+  ledger.sessionAccounts['sess-epoch'] = {
+    email: 'bound@example.com',
+    source: 'active_account',
+    lastDay: null,
+    allocations: { 'bound@example.com': metrics },
+    lastSnapshot: backend.cloneMetrics(metrics)
+  };
+  const session = {
+    sessionId: 'sess-epoch',
+    client: 'antigravity',
+    day: '2026-10-27',
+    startedAt: '2026-10-26T20:00:00Z',
+    periods: { allTime: { totalTokens: 500, costUsd: 0.5 } }
+  };
+  const res = backend.aggregateAccountUsage({
+    sessions: [session],
+    dailyHistory: [],
+    ledger,
+    quotaWindows: {},
+    range: { start: '2026-10-01', end: '2026-12-31' },
+    activeAccount: { email: 'active@example.com' }
+  });
+  assert.equal(res.byAccount['bound@example.com'].totalTokens, 300);
+  assert.equal(res.byAccount['active@example.com'], undefined);
+});
