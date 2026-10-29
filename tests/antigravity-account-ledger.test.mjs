@@ -54,6 +54,7 @@ class FakeElement {
     }
   }
   replaceChildren(...nodes) {
+    this.textContent = '';
     for (const child of this.children) child.parentNode = null;
     this.children = [];
     this.append(...nodes);
@@ -257,7 +258,8 @@ test('antigravity-account-ledger UI mounts a self-contained header, toggles coll
     assert.equal(root.querySelector('.ag-ledger-title').textContent, 'Antigravity 多账号账本');
     assert.equal(root.querySelector('.ag-ledger-assign-btn'), null);
     assert.equal(statusBanner.getAttribute('role'), 'status');
-    assert.match(statusBanner.textContent, /已归属到具体账号：75% Tokens/);
+    assert.equal(statusBanner.classList.contains('hidden'), true);
+    assert.equal(statusBanner.textContent, '');
 
     const collapseBtn = root.querySelector('.ag-ledger-collapse-btn');
     for (const fn of collapseBtn.listeners.get('click') || []) {
@@ -312,7 +314,9 @@ test('antigravity-account-ledger UI shows errors, retries, and recovers', async 
     assert.equal(attempts, 2);
     assert.equal(root.querySelector('.ag-ledger-retry-btn'), null);
     assert.ok(root.querySelector('.ag-ledger-kpi-grid'));
-    assert.match(root.querySelector('.ag-ledger-status-banner').textContent, /已归属到具体账号/);
+    const statusBanner = root.querySelector('.ag-ledger-status-banner');
+    assert.equal(statusBanner.classList.contains('hidden'), true);
+    assert.equal(statusBanner.textContent, '');
     mounted.dispose();
   } finally {
     dom.restore();
