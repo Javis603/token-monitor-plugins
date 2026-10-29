@@ -213,6 +213,7 @@ test('antigravity-account-ledger UI mounts into Home module header, toggles coll
   }
 });
 
+
 function encodeVarintBuf(value) {
   let v = BigInt(value);
   const bytes = [];
@@ -337,6 +338,69 @@ test('antigravity-account-ledger decodes SQLite Protobuf generation records, ste
   assert.ok(callStepOnly);
   assert.equal(callStepOnly.alignmentMode, 'step_only');
   assert.equal(callStepOnly.model, 'claude-sonnet-4-6');
+
+  assert.equal(backend.resolveModelAndPrice({ modelEnum: 1072, inputTokens: 1000, outputTokens: 100 }).model, 'gemini-3.7-flash');
+  assert.equal(backend.resolveModelAndPrice({ modelEnum: 1299, inputTokens: 1000, outputTokens: 100 }).model, 'gemini-3.7-flash');
+});
+
+test('antigravity-account-ledger bounds CLI log attribution and ignores 0-token carpool warmup rows in token_stats.db', (t) => {
+  const { DatabaseSync } = require('node:sqlite');
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-warmup-home-'));
+  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+
+  const toolsDir = path.join(tmpHome, '.antigravity_tools');
+  const cliLogDir = path.join(tmpHome, '.gemini', 'antigravity-cli', 'log');
+  fs.mkdirSync(toolsDir, { recursive: true });
+  fs.mkdirSync(cliLogDir, { recursive: true });
+
+  const logFile = path.join(cliLogDir, 'cli-20261006_214817.log');
+  fs.writeFileSync(
+    logFile,
+    'I1006 21:48:19.297368 12345 server_oauth.go:322] applyAuthResult: email=cli-carpool@example.com\n',
+    'utf8'
+  );
+  const logStartSec = new Date(2026, 9, 6, 21, 48, 19).getTime() / 1000;
+  fs.utimesSync(logFile, logStartSec + 120, logStartSec + 120);
+
+  const statsDb = new DatabaseSync(path.join(toolsDir, 'token_stats.db'));
+  statsDb.exec('CREATE TABLE token_usage (id INTEGER PRIMARY KEY, timestamp INTEGER, account_email TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER)');
+  const ins = statsDb.prepare('INSERT INTO token_usage (timestamp, account_email, model, input_tokens, output_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?)');
+  ins.run(1789383999, 'warmup-carpool@example.com', 'gemini-3.8-flash', 0, 0, 0);
+  ins.run(1790000000, 'real-proxy@example.com', 'gemini-3.8-flash', 1200, 300, 1500);
+  statsDb.close();
+
+  const ledger = backend.createDefaultLedger('2026-10-28T00:00:00Z');
+  const quotaWindows = backend.buildQuotaAttributionWindows([], { homeDir: tmpHome });
+
+  const cliInWindow = backend.attributeCallRecord({
+    source: 'antigravity-cli',
+    timestampMs: (logStartSec + 30) * 1000,
+    model: 'gemini-3.8-flash'
+  }, { ledger, quotaWindows });
+  assert.equal(cliInWindow.email, 'cli-carpool@example.com');
+  assert.equal(cliInWindow.source, 'cli_log');
+
+  const desktopLater = backend.attributeCallRecord({
+    source: 'antigravity',
+    timestampMs: (logStartSec + 10 * 86400) * 1000,
+    model: 'gemini-4-argon'
+  }, { ledger, quotaWindows });
+  assert.equal(desktopLater.email, 'unattributed');
+
+  const atWarmup = backend.attributeCallRecord({
+    source: 'antigravity',
+    timestampMs: (1789383999 + 10) * 1000,
+    model: 'gemini-3.8-flash'
+  }, { ledger, quotaWindows });
+  assert.equal(atWarmup.email, 'unattributed');
+
+  const atRealStats = backend.attributeCallRecord({
+    source: 'antigravity',
+    timestampMs: (1790000000 + 30) * 1000,
+    model: 'gemini-3.8-flash'
+  }, { ledger, quotaWindows });
+  assert.equal(atRealStats.email, 'real-proxy@example.com');
+  assert.equal(atRealStats.source, 'tools_token_stats');
 });
 
 test('antigravity-account-ledger discovers active account priority and applies 4-layer attribution + cross-midnight deltas', (t) => {
