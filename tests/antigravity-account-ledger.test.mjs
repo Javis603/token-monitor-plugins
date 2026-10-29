@@ -11,10 +11,32 @@ const require = createRequire(import.meta.url);
 const backend = require('../plugins/antigravity-account-ledger/backend.cjs');
 const pluginDir = fileURLToPath(new URL('../plugins/antigravity-account-ledger/', import.meta.url));
 
+function removeTestDir(dir) {
+  if (!dir) return;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { removeTestDir(full); continue; }
+      try { fs.unlinkSync(full); } catch (_) {}
+    }
+  } catch (_) {}
+  try { fs.rmdirSync(dir); } catch (_) {}
+  try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); } catch (_) {}
+}
+
 function listPluginFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => (
     entry.isDirectory() ? listPluginFiles(path.join(dir, entry.name)) : [path.join(dir, entry.name)]
   ));
+}
+
+function cssBlock(css, selector) {
+  const index = css.indexOf(`${selector} {`);
+  if (index === -1) return null;
+  const open = css.indexOf('{', index);
+  const close = css.indexOf('}', open);
+  if (open === -1 || close === -1) return null;
+  return css.slice(open + 1, close);
 }
 
 class FakeElement {
@@ -43,6 +65,11 @@ class FakeElement {
   set className(val) {
     this._classes = new Set(String(val || '').split(/\s+/).filter(Boolean));
   }
+  get textContent() {
+    if (this.children.length === 0) return this._text;
+    return this.children.map((child) => child.textContent || '').join('');
+  }
+  set textContent(val) { this._text = String(val ?? ''); }
   setAttribute(k, v) { this.attributes.set(k, String(v)); }
   getAttribute(k) { return this.attributes.get(k) ?? null; }
   append(...nodes) {
@@ -167,7 +194,7 @@ test('antigravity-account-ledger restricts view surfaces and defaultSurfaces to 
 
 test('antigravity-account-ledger backend computes range summaries, coverage, and preferences', async (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-test-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
   const instance = await backend.activate({ dataDirectory: tmpDir, hostDataDir: tmpDir, homeDir: tmpDir, conversationDirs: [] });
   assert.ok(instance);
   const res = await instance.call('getSummary', {
@@ -183,7 +210,8 @@ test('antigravity-account-ledger backend computes range summaries, coverage, and
   }
   assert.equal(typeof res.summary.overallCostUsd, 'number');
   const prefs = JSON.parse(fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8'));
-  assert.deepEqual(prefs, { accountFilter: 'all', startDate: '2026-10-01', range: { start: '2026-10-01' } });
+  const expectedEnd = '2026-10-29' === backend.localDayKey() ? null : '2026-10-29';
+  assert.deepEqual(prefs, { accountFilter: 'all', startDate: '2026-10-01', endDate: expectedEnd, range: { start: '2026-10-01' } });
   assert.equal('end' in prefs.range, false);
   await assert.rejects(instance.call('assignDateRange', {}), /Unknown method/);
   instance.dispose?.();
@@ -414,7 +442,7 @@ function dispatch(element, type) {
 test('antigravity-account-ledger decodes SQLite Protobuf generation records, step attributes, tiered pricing, and WAL fallback', (t) => {
   const { DatabaseSync } = require('node:sqlite');
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-db-scan-test-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
 
   const tsMsg1 = Buffer.concat([pbVarintField(1, 1793000000), pbVarintField(2, 0)]);
   const tsMsg2 = Buffer.concat([pbVarintField(1, 1793000600), pbVarintField(2, 0)]);
@@ -523,7 +551,7 @@ test('antigravity-account-ledger decodes SQLite Protobuf generation records, ste
 test('antigravity-account-ledger deduplicates no-response conversations across backup roots', (t) => {
   const { DatabaseSync } = require('node:sqlite');
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-dedup-home-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
 
   const primaryDir = path.join(tmpHome, '.gemini', 'antigravity', 'conversations');
   const backupDir = path.join(tmpHome, '.gemini', 'antigravity-backup', 'conversations');
@@ -559,7 +587,7 @@ test('antigravity-account-ledger deduplicates no-response conversations across b
 test('antigravity-account-ledger bounds CLI log attribution and ignores 0-token carpool warmup rows in token_stats.db', (t) => {
   const { DatabaseSync } = require('node:sqlite');
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-warmup-home-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
 
   const toolsDir = path.join(tmpHome, '.antigravity_tools');
   const cliLogDir = path.join(tmpHome, '.gemini', 'antigravity-cli', 'log');
@@ -620,7 +648,7 @@ test('antigravity-account-ledger bounds CLI log attribution and ignores 0-token 
 test('antigravity-account-ledger discovers active account priority and applies layered attribution + cross-midnight deltas', (t) => {
   const { DatabaseSync } = require('node:sqlite');
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-attr-home-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
 
   const toolsDir = path.join(tmpHome, '.antigravity_tools');
   const accountsSubDir = path.join(toolsDir, 'accounts');
@@ -736,7 +764,7 @@ test('antigravity-account-ledger discovers active account priority and applies l
 
 test('antigravity-account-ledger groups Argon quotas separately and falls back to Gemini windows', (t) => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-argon-home-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
 
   assert.equal(backend.quotaGroupForModel('gemini-4-argon'), 'argon-weekly');
   assert.equal(backend.quotaGroupForModel('claude-opus-4-6-thinking'), '3p-weekly');
@@ -839,7 +867,7 @@ test('antigravity-account-ledger resolves models by response/display/enum priori
 
 test('antigravity-account-ledger aligns generation usage with steps without double counting or stale models', (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-align-test-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
 
   const baseSec = 1793000000;
   const usageShared = makeUsageStats({ modelEnum: 1007, input: 200, output: 20, responseId: 'resp-shared' });
@@ -889,7 +917,7 @@ test('antigravity-account-ledger aligns generation usage with steps without doub
 
 test('antigravity-account-ledger rejects stale and malformed DB scan caches', (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cache-test-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
 
   const usage = makeUsageStats({ modelEnum: 1007, input: 40, output: 4, responseId: 'resp-cache' });
   const dbPath = createConversationDb(tmpDir, 'conv-cache.db', {
@@ -934,7 +962,7 @@ test('antigravity-account-ledger snapshots WAL databases without copying invalid
   t.after(() => {
     process.env.TEMP = prevTemp;
     process.env.TMP = prevTmp;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTestDir(tmpDir);
   });
 
   const dbPath = createConversationDb(tmpDir, 'conv-wal.db', {
@@ -958,7 +986,7 @@ test('antigravity-account-ledger snapshots WAL databases without copying invalid
 
 test('antigravity-account-ledger reads camelCase quota buckets, keeps the newest quota, and prefers the later reset on ties', (t) => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-quota-home-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
 
   const resetEarly = '2026-10-30T00:00:00Z';
   const resetLate = '2026-11-05T00:00:00Z';
@@ -1029,8 +1057,8 @@ test('antigravity-account-ledger merges accounts across sources, tolerates old t
   t.after(() => {
     if (prevCliHome === undefined) delete process.env.GEMINI_CLI_HOME;
     else process.env.GEMINI_CLI_HOME = prevCliHome;
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-    fs.rmSync(tmpHomeModern, { recursive: true, force: true });
+    removeTestDir(tmpHome);
+    removeTestDir(tmpHomeModern);
   });
 
   const toolsDir = path.join(tmpHome, '.antigravity_tools');
@@ -1186,7 +1214,10 @@ test('antigravity-account-ledger reads per-day allocations for cross-midnight se
     range: { start: '2026-10-28', end: '2026-10-29' }
   });
   assert.equal(aggregated.byAccount['quota@example.com'].totalTokens, 600);
-  assert.equal(aggregated.byAccount.unattributed.totalTokens, 1000);
+  assert.equal(aggregated.byAccount['active@example.com'].totalTokens, 1000,
+    'the earlier day of a cross-midnight session must stay attributed to its account');
+  assert.equal(aggregated.byAccount.unattributed?.totalTokens || 0, 0,
+    'a cross-midnight session must not fall back into unattributed');
   assert.equal(aggregated.overallTotalTokens, 1600);
 
   const fallback = backend.aggregateAccountUsage({
@@ -1197,7 +1228,9 @@ test('antigravity-account-ledger reads per-day allocations for cross-midnight se
     range: { start: '2026-10-28', end: '2026-10-29' }
   });
   assert.equal(fallback.byAccount['quota@example.com'].totalTokens, 600);
-  assert.equal(fallback.overallTotalTokens, 600);
+  assert.equal(fallback.byAccount['active@example.com'].totalTokens, 1000,
+    'without daily history every recorded day of the session must be summed');
+  assert.equal(fallback.overallTotalTokens, 1600);
 });
 
 test('antigravity-account-ledger attributes sessions with the supplied active account and merges live daily history', () => {
@@ -1279,7 +1312,7 @@ test('antigravity-account-ledger derives measured input tokens and caps CLI log 
   assert.equal(explicit.inputTokens, 20);
 
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-cap-home-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
   const cliLogDir = path.join(tmpHome, 'cli-log');
   fs.mkdirSync(cliLogDir);
   const logFile = path.join(cliLogDir, 'cli-20261006_214817.log');
@@ -1300,8 +1333,8 @@ test('antigravity-account-ledger deduplicates archived sessions and reads legacy
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-archive-root-'));
   const rootLegacy = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-archive-legacy-'));
   t.after(() => {
-    fs.rmSync(root, { recursive: true, force: true });
-    fs.rmSync(rootLegacy, { recursive: true, force: true });
+    removeTestDir(root);
+    removeTestDir(rootLegacy);
   });
 
   const archiveDir = path.join(root, 'tokscale-cache', 'antigravity-archive');
@@ -1341,7 +1374,7 @@ test('antigravity-account-ledger deduplicates archived sessions and reads legacy
 
 test('antigravity-account-ledger backs up corrupt ledgers and rejects impossible timestamps', (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-corrupt-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
   const ledgerFile = path.join(tmpDir, backend.DEFAULT_LEDGER_FILENAME);
   fs.writeFileSync(ledgerFile, '{not valid json', 'utf8');
   const ledger = backend.loadLedger(ledgerFile);
@@ -1361,7 +1394,7 @@ test('antigravity-account-ledger backs up corrupt ledgers and rejects impossible
 
 test('antigravity-account-ledger auto refresh publishes on a timer, respects visibility, and never publishes explicit reads', async (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-refresh-test-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
   const published = [];
   const instance = await backend.activate({
     dataDirectory: tmpDir,
@@ -1388,6 +1421,7 @@ test('antigravity-account-ledger auto refresh publishes on a timer, respects vis
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8')), {
     accountFilter: 'all',
     startDate: '2026-10-01',
+    endDate: '2026-10-29' === backend.localDayKey() ? null : '2026-10-29',
     range: { start: '2026-10-01' }
   });
 
@@ -1409,7 +1443,7 @@ test('antigravity-account-ledger auto refresh publishes on a timer, respects vis
 
 test('antigravity-account-ledger migrates host ledgers when the data directory lives under plugin-data', async (t) => {
   const hostRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-hostdata-test-'));
-  t.after(() => fs.rmSync(hostRoot, { recursive: true, force: true }));
+  t.after(() => removeTestDir(hostRoot));
   const dataDirectory = path.join(hostRoot, 'plugin-data', 'antigravity-account-ledger');
   fs.mkdirSync(dataDirectory, { recursive: true });
   fs.writeFileSync(path.join(hostRoot, backend.DEFAULT_LEDGER_FILENAME), JSON.stringify({
@@ -1608,7 +1642,7 @@ test('antigravity-account-ledger UI sizes the empty model row to the cache-write
 
 test('antigravity-account-ledger persists only the start date and follows the current day for the end date', async (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-startdate-test-'));
-  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpDir));
   const today = backend.localDayKey();
 
   fs.writeFileSync(path.join(tmpDir, 'preferences.json'), JSON.stringify({
@@ -1641,6 +1675,7 @@ test('antigravity-account-ledger persists only the start date and follows the cu
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8')), {
     accountFilter: 'all',
     startDate: '2026-10-01',
+    endDate: '2026-10-20',
     range: { start: '2026-10-01' }
   });
 
@@ -1717,7 +1752,7 @@ test('antigravity-account-ledger documentation does not advertise attribution co
 
 test('antigravity-account-ledger falls back to consumed Gemini windows when the Argon quota is unconsumed', (t) => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-argon-fallback-'));
-  t.after(() => fs.rmSync(tmpHome, { recursive: true, force: true }));
+  t.after(() => removeTestDir(tmpHome));
 
   const resetTime = '2026-10-31T11:13:09Z';
   const callTs = Date.parse(resetTime) - 2 * 86400_000;
@@ -1804,4 +1839,475 @@ test('antigravity-account-ledger compares session activation times as epochs bef
   });
   assert.equal(res.byAccount['bound@example.com'].totalTokens, 300);
   assert.equal(res.byAccount['active@example.com'], undefined);
+});
+
+test('antigravity-account-ledger backs up structurally invalid ledgers instead of overwriting them', (t) => {
+  const invalidPayloads = [
+    '"a string, not a ledger"',
+    '123',
+    'null',
+    'true',
+    '[]',
+    JSON.stringify({ version: 0, featureActivatedAt: '2026-10-01T00:00:00Z' }),
+    JSON.stringify({ version: 1, featureActivatedAt: '2026-10-01T00:00:00Z', timeline: {} }),
+    JSON.stringify({ version: 1, featureActivatedAt: '2026-10-01T00:00:00Z', sessionAccounts: [] }),
+    JSON.stringify({ unrelated: true })
+  ];
+  for (const [index, payload] of invalidPayloads.entries()) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-shape-'));
+    t.after(() => removeTestDir(tmpDir));
+    const ledgerFile = path.join(tmpDir, backend.DEFAULT_LEDGER_FILENAME);
+    fs.writeFileSync(ledgerFile, payload, 'utf8');
+    const ledger = backend.loadLedger(ledgerFile);
+    assert.equal(ledger.version, 1, `payload #${index} must rebuild a default ledger`);
+    assert.deepEqual(ledger.timeline, []);
+    assert.equal(Array.isArray(ledger.sessionAccounts), false);
+    const backups = fs.readdirSync(tmpDir).filter((name) => name.startsWith(`${backend.DEFAULT_LEDGER_FILENAME}.corrupt-`));
+    assert.equal(backups.length, 1, `payload #${index} must be backed up exactly once`);
+    assert.equal(fs.readFileSync(path.join(tmpDir, backups[0]), 'utf8'), payload,
+      `payload #${index} must be preserved verbatim in the backup`);
+    const rebuilt = JSON.parse(fs.readFileSync(ledgerFile, 'utf8'));
+    assert.equal(rebuilt.version, 1);
+    assert.deepEqual(rebuilt.timeline, []);
+    assert.deepEqual(rebuilt.sessionAccounts, {});
+  }
+});
+
+test('antigravity-account-ledger keeps a valid ledger untouched and normalizes array session accounts', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-keep-'));
+  t.after(() => removeTestDir(tmpDir));
+  const ledgerFile = path.join(tmpDir, backend.DEFAULT_LEDGER_FILENAME);
+  const valid = {
+    version: 1,
+    featureActivatedAt: '2026-10-01T00:00:00Z',
+    lastActiveAccount: 'a@example.com',
+    timeline: [{ email: 'a@example.com', startedAt: '2026-10-10T00:00:00Z', endedAt: null, source: 'antigravity_tools' }],
+    sessionAccounts: { 'sess-1': { email: 'a@example.com', source: 'active_account', allocations: {}, lastSnapshot: null } }
+  };
+  fs.writeFileSync(ledgerFile, JSON.stringify(valid), 'utf8');
+  const ledger = backend.loadLedger(ledgerFile);
+  assert.equal(ledger.timeline.length, 1);
+  assert.equal(ledger.sessionAccounts['sess-1'].email, 'a@example.com');
+  assert.equal(fs.readdirSync(tmpDir).filter((name) => name.includes('.corrupt-')).length, 0);
+
+  fs.writeFileSync(ledgerFile, JSON.stringify({ ...valid, sessionAccounts: [] }), 'utf8');
+  const rebuilt = backend.loadLedger(ledgerFile);
+  assert.equal(Array.isArray(rebuilt.sessionAccounts), false);
+  rebuilt.sessionAccounts.sessX = { email: 'x@example.com', allocations: {}, lastSnapshot: null };
+  backend.saveLedger(rebuilt, ledgerFile);
+  const saved = JSON.parse(fs.readFileSync(ledgerFile, 'utf8'));
+  assert.equal(saved.sessionAccounts.sessX.email, 'x@example.com');
+});
+
+test('antigravity-account-ledger re-anchors a regressed all-time session without counting it twice', () => {
+  const ledger = backend.createDefaultLedger('2026-10-01T00:00:00Z');
+  const session = (day, tokens) => ({
+    sessionId: 'sess-regress',
+    client: 'antigravity',
+    day,
+    startedAt: '2026-10-28T10:00:00Z',
+    periods: {
+      today: { totalTokens: tokens, costUsd: tokens / 10000 },
+      allTime: { totalTokens: tokens, costUsd: tokens / 10000 }
+    }
+  });
+  backend.syncActiveAccountSessions([session('2026-10-28', 1000)], { email: 'a@example.com' }, ledger, { save: false });
+  assert.equal(ledger.sessionAccounts['sess-regress'].allocations['a@example.com'].totalTokens, 1000);
+
+  backend.syncActiveAccountSessions([session('2026-10-29', 500)], { email: 'a@example.com' }, ledger, { save: false });
+  const regressed = ledger.sessionAccounts['sess-regress'];
+  assert.equal(regressed.allocations['a@example.com'].totalTokens, 1000, 'the regressed remainder must not be counted again');
+  assert.equal(regressed.lastSnapshot.totalTokens, 500, 'the high-water mark must be re-anchored to the regressed value');
+
+  backend.syncActiveAccountSessions([session('2026-10-29', 700)], { email: 'b@example.com' }, ledger, { save: false });
+  const grown = ledger.sessionAccounts['sess-regress'];
+  assert.equal(grown.allocations['a@example.com'].totalTokens, 1000);
+  assert.equal(grown.allocations['b@example.com'].totalTokens, 200, 'only the growth after the regression is new usage');
+  assert.equal(backend.allocationsForDay(grown, '2026-10-29')['b@example.com'].totalTokens, 200);
+});
+
+test('antigravity-account-ledger leaves the scan cache on disk untouched while the memory cache is warm', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cache-warm-'));
+  t.after(() => removeTestDir(tmpDir));
+  const dbPath = createConversationDb(tmpDir, 'conv-warm.db', {
+    gens: [{ idx: 1, data: makeGenData({ usageBuf: makeUsageStats({ responseId: 'resp-warm' }), stepIndexes: [1] }) }]
+  });
+  const cacheFile = path.join(tmpDir, 'cache.json');
+  backend.GLOBAL_DB_SCAN_CACHE.clear();
+  const first = backend.scanAllConversationDbs({ conversationDirs: [tmpDir], cacheFile });
+  assert.equal(first.length, 1);
+  const written = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  assert.equal(written.version, 2);
+  assert.ok(Array.isArray(written.entries[dbPath].calls));
+  const body = fs.readFileSync(cacheFile, 'utf8');
+  assert.equal(body.includes('\n'), false, 'the scan cache must be written compactly');
+  const mtimeBefore = fs.statSync(cacheFile).mtimeMs;
+
+  const second = backend.scanAllConversationDbs({ conversationDirs: [tmpDir], cacheFile });
+  assert.equal(second.length, 1);
+  assert.equal(fs.statSync(cacheFile).mtimeMs, mtimeBefore, 'a warm memory cache must not rewrite the cache file');
+  assert.equal(fs.readFileSync(cacheFile, 'utf8'), body);
+});
+
+test('antigravity-account-ledger re-tags cached scan records with the source that consumes them', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cache-source-'));
+  t.after(() => removeTestDir(tmpDir));
+  const convDir = path.join(tmpDir, 'conv');
+  fs.mkdirSync(convDir);
+  createConversationDb(convDir, 'conv-src.db', {
+    gens: [{ idx: 1, data: makeGenData({ usageBuf: makeUsageStats({ responseId: 'resp-src' }), stepIndexes: [1] }) }]
+  });
+  const cacheFile = path.join(tmpDir, 'cache.json');
+  const sources = [{ source: 'antigravity', dir: convDir }, { source: 'antigravity-cli', dir: convDir }];
+  backend.GLOBAL_DB_SCAN_CACHE.clear();
+  const first = backend.scanAllConversationDbs({ conversationSources: sources, cacheFile });
+  assert.ok(first.length > 0);
+  assert.deepEqual([...new Set(first.map((call) => call.source))], ['antigravity']);
+
+  backend.GLOBAL_DB_SCAN_CACHE.clear();
+  const second = backend.scanAllConversationDbs({ conversationSources: sources, cacheFile });
+  assert.ok(second.length > 0);
+  assert.deepEqual([...new Set(second.map((call) => call.source))], ['antigravity']);
+
+  const cliOnly = backend.scanAllConversationDbs({ conversationSources: [{ source: 'antigravity-cli', dir: convDir }], cacheFile });
+  assert.ok(cliOnly.length > 0);
+  assert.deepEqual([...new Set(cliOnly.map((call) => call.source))], ['antigravity-cli']);
+});
+
+test('antigravity-account-ledger skips quota windows for disabled accounts', (t) => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-disabled-quota-'));
+  t.after(() => removeTestDir(tmpHome));
+  const accountsDir = path.join(tmpHome, '.antigravity_tools', 'accounts');
+  fs.mkdirSync(accountsDir, { recursive: true });
+  const quota = (fraction) => ({
+    quota_groups: [{
+      display_name: 'Gemini',
+      buckets: [{ bucket_id: 'gemini-weekly', window: 'weekly', remaining_fraction: fraction, reset_time: '2026-10-31T00:00:00Z' }]
+    }]
+  });
+  fs.writeFileSync(path.join(accountsDir, 'acc-off.json'), JSON.stringify({
+    id: 'acc-off', email: 'off@example.com', name: 'Off', disabled: true, quota: quota(0.2)
+  }), 'utf8');
+  fs.writeFileSync(path.join(accountsDir, 'acc-on.json'), JSON.stringify({
+    id: 'acc-on', email: 'on@example.com', name: 'On', quota: quota(0.3)
+  }), 'utf8');
+  const discovered = backend.discoverAccounts({ homeDir: tmpHome });
+  const byEmail = Object.fromEntries(discovered.map((account) => [account.email, account]));
+  assert.equal(byEmail['off@example.com'].disabled, true);
+  assert.equal(byEmail['on@example.com'].disabled, false);
+  const windows = backend.buildQuotaAttributionWindows(discovered, { homeDir: tmpHome });
+  assert.deepEqual(windows['gemini-weekly'].map((window) => window.email), ['on@example.com']);
+});
+
+test('antigravity-account-ledger falls back to the call day when the timestamp is empty', () => {
+  const ledger = backend.createDefaultLedger('2026-10-01T00:00:00Z');
+  const quotaWindows = {
+    'gemini-weekly': [{
+      email: 'quota@example.com', consumed: true,
+      startMs: Date.parse('2026-10-01T00:00:00Z'), endMs: Date.parse('2026-10-31T00:00:00Z')
+    }]
+  };
+  const attributed = backend.attributeCallRecord(
+    { timestamp: '', day: '2026-10-15', model: 'gemini-3.8-flash' },
+    { ledger, quotaWindows }
+  );
+  assert.equal(attributed.email, 'quota@example.com');
+  assert.equal(attributed.source, 'quota_anchor');
+  assert.equal(attributed.layer, 2);
+});
+
+test('antigravity-account-ledger rejects truncated and unsafe usage payloads', () => {
+  const full = makeUsageStats({ modelEnum: 1007, input: 250000, output: 10000 });
+  assert.equal(backend.parseUsageStats(full).outputTokens, 10000);
+  assert.equal(backend.parseUsageStats(full.subarray(0, full.length - 2)), null,
+    'a truncated usage payload must not be counted as a complete record');
+  const oversized = Buffer.concat([
+    pbVarintField(1, 1007),
+    Buffer.from([0x10, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])
+  ]);
+  assert.equal(backend.parseUsageStats(oversized), null,
+    'a negative 10-byte varint must not become a token count');
+});
+
+test('antigravity-account-ledger drops packed step-index lists that are truncated or oversized', () => {
+  assert.deepEqual(backend.unpackVarints(Buffer.concat([encodeVarintBuf(1), encodeVarintBuf(2)])), [1, 2]);
+  assert.deepEqual(backend.unpackVarints(Buffer.concat([encodeVarintBuf(1), Buffer.from([0x80])])), [],
+    'a truncated packed list must not be consumed as a short list');
+  assert.deepEqual(backend.unpackVarints(Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])), [],
+    'an oversized packed varint must be rejected');
+});
+
+test('antigravity-account-ledger finds CLI auth lines past 32 KB and corrects cross-year timestamps', (t) => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-cli-large-'));
+  t.after(() => removeTestDir(tmpHome));
+  const cliLogDir = path.join(tmpHome, 'log');
+  fs.mkdirSync(cliLogDir);
+
+  const bigLog = path.join(cliLogDir, 'cli-20261006_214817.log');
+  fs.writeFileSync(bigLog, 'x'.repeat(40000)
+    + 'I1006 21:48:19.297368 12345 server_oauth.go:322] applyAuthResult: email=big@example.com, authMethod=consumer\n', 'utf8');
+  const bigStartMs = new Date(2026, 9, 6, 21, 48, 19, 297).getTime();
+  fs.utimesSync(bigLog, bigStartMs / 1000, bigStartMs / 1000);
+
+  const crossYearLog = path.join(cliLogDir, 'cli-20270101_003000.log');
+  fs.writeFileSync(crossYearLog,
+    'I1231 23:59:00.500000 1 server_oauth.go:198] applyAuthResult: email=newyear@example.com, authMethod=consumer\n', 'utf8');
+  const newYearMs = new Date(2026, 11, 31, 23, 59, 0, 500).getTime();
+  fs.utimesSync(crossYearLog, newYearMs / 1000, newYearMs / 1000);
+
+  const windows = backend.discoverCliLogWindows({ cliLogDir });
+  assert.equal(windows.length, 2);
+  const big = windows.find((window) => window.email === 'big@example.com');
+  assert.ok(big, 'an auth line past the first 32 KB must still be discovered');
+  assert.equal(big.startMs, bigStartMs - 5000);
+  const newYear = windows.find((window) => window.email === 'newyear@example.com');
+  assert.ok(newYear);
+  assert.equal(newYear.startMs, newYearMs - 5000, 'a log spanning new year must use the previous year');
+});
+
+test('antigravity-account-ledger binds sessions that carry a numeric start timestamp', () => {
+  const ledger = backend.createDefaultLedger('2026-10-01T00:00:00Z');
+  const startedAt = Date.parse('2026-10-28T10:00:00Z');
+  const session = {
+    sessionId: 'sess-numeric', client: 'antigravity', day: '2026-10-28', startedAt,
+    periods: { allTime: { totalTokens: 500, costUsd: 0.5 } }
+  };
+  assert.equal(backend.extractSessionTimestamp(session), startedAt);
+  const sync = backend.syncActiveAccountSessions([session], { email: 'a@example.com' }, ledger, { save: false });
+  assert.equal(sync.changed, true);
+  const binding = ledger.sessionAccounts['sess-numeric'];
+  assert.ok(binding);
+  assert.equal(binding.allocations['a@example.com'].totalTokens, 500);
+});
+
+test('antigravity-account-ledger keeps the local day for small epoch-scale timestamps', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-epoch-day-'));
+  t.after(() => removeTestDir(tmpDir));
+  const seconds = 100000;
+  const dbPath = createConversationDb(tmpDir, 'conv-epoch.db', {
+    steps: [{ idx: 1, metadata: makeStepMetadata({ tsSec: seconds, usageBuf: makeUsageStats({ input: 10, output: 1 }) }) }]
+  });
+  const calls = backend.scanConversationDb(dbPath);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].timestampMs, seconds * 1000);
+  assert.equal(calls[0].day, backend.localDayKey(new Date(seconds * 1000)));
+});
+
+test('antigravity-account-ledger removes the atomic write temp file when the write fails', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-atomic-write-'));
+  t.after(() => removeTestDir(tmpDir));
+  const target = path.join(tmpDir, 'target.json');
+  fs.mkdirSync(target);
+  assert.throws(() => backend.writeJsonAtomic(target, { a: 1 }));
+  const leftovers = fs.readdirSync(tmpDir).filter((name) => name.includes('.tmp.'));
+  assert.deepEqual(leftovers, [], 'a failed atomic write must not leave a temp file behind');
+});
+
+test('antigravity-account-ledger writes the compact cache without leaving temp files behind', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-atomic-ok-'));
+  t.after(() => removeTestDir(tmpDir));
+  const target = path.join(tmpDir, 'nested', 'cache.json');
+  backend.writeJsonAtomic(target, { version: 2, entries: {} }, { compact: true });
+  const body = fs.readFileSync(target, 'utf8');
+  assert.equal(body.includes('\n'), false);
+  assert.deepEqual(fs.readdirSync(path.dirname(target)).filter((name) => name.includes('.tmp.')), []);
+});
+
+test('antigravity-account-ledger removes the database snapshot directory when the handle closes', (t) => {
+  const { DatabaseSync } = require('node:sqlite');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-snap-close-'));
+  const tempRoot = path.join(tmpDir, 'temp');
+  fs.mkdirSync(tempRoot);
+  const prevTemp = process.env.TEMP;
+  const prevTmp = process.env.TMP;
+  process.env.TEMP = tempRoot;
+  process.env.TMP = tempRoot;
+  t.after(() => {
+    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
+    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
+    removeTestDir(tmpDir);
+  });
+  const dbPath = createConversationDb(tmpDir, 'conv-snap.db', {
+    gens: [{ idx: 1, data: makeGenData({ usageBuf: makeUsageStats({ responseId: 'resp-snap' }), stepIndexes: [1] }) }]
+  });
+  fs.writeFileSync(`${dbPath}-wal`, Buffer.from('corrupt-or-locked-wal-header'));
+  fs.mkdirSync(`${dbPath}-shm`);
+  const handle = backend.openConversationDbWithFallback(dbPath);
+  assert.ok(handle);
+  assert.equal(fs.readdirSync(tempRoot).filter((name) => name.startsWith('ag-db-snap-')).length, 1);
+  handle.close();
+  assert.deepEqual(fs.readdirSync(tempRoot).filter((name) => name.startsWith('ag-db-snap-')), [],
+    'the snapshot directory must be removed when the handle is closed');
+});
+
+test('antigravity-account-ledger removes the database snapshot directory when the fallback fails', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-snap-fail-'));
+  const tempRoot = path.join(tmpDir, 'temp');
+  fs.mkdirSync(tempRoot);
+  const prevTemp = process.env.TEMP;
+  const prevTmp = process.env.TMP;
+  process.env.TEMP = tempRoot;
+  process.env.TMP = tempRoot;
+  t.after(() => {
+    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
+    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
+    removeTestDir(tmpDir);
+  });
+  const dbPath = path.join(tmpDir, 'broken.db');
+  fs.mkdirSync(dbPath);
+  assert.equal(backend.openConversationDbWithFallback(dbPath), null);
+  assert.deepEqual(fs.readdirSync(tempRoot).filter((name) => name.startsWith('ag-db-snap-')), [],
+    'a failed snapshot must not leave its directory behind');
+});
+
+test('antigravity-account-ledger reclaims orphaned database snapshots older than ten minutes', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-snap-orphan-'));
+  const tempRoot = path.join(tmpDir, 'temp');
+  fs.mkdirSync(tempRoot);
+  const prevTemp = process.env.TEMP;
+  const prevTmp = process.env.TMP;
+  process.env.TEMP = tempRoot;
+  process.env.TMP = tempRoot;
+  t.after(() => {
+    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
+    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
+    removeTestDir(tmpDir);
+  });
+  const orphan = path.join(tempRoot, 'ag-db-snap-orphan');
+  const fresh = path.join(tempRoot, 'ag-db-snap-fresh');
+  const unrelated = path.join(tempRoot, 'ag-db-scan-keep');
+  for (const dir of [orphan, fresh, unrelated]) { fs.mkdirSync(dir); fs.writeFileSync(path.join(dir, 'payload.bin'), 'x'); }
+  const oldSec = (Date.now() - 15 * 60 * 1000) / 1000;
+  fs.utimesSync(orphan, oldSec, oldSec);
+
+  backend.scanAllConversationDbs({ conversationDirs: [], cacheFile: null });
+  assert.equal(fs.existsSync(orphan), false, 'a stale snapshot directory must be reclaimed');
+  assert.equal(fs.existsSync(fresh), true, 'a snapshot younger than ten minutes must be kept');
+  assert.equal(fs.existsSync(unrelated), true, 'unrelated temp directories must be left alone');
+});
+
+test('antigravity-account-ledger drops invalid persisted and requested date ranges', async (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-test-'));
+  t.after(() => removeTestDir(tmpDir));
+  const today = backend.localDayKey();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  fs.writeFileSync(path.join(tmpDir, 'preferences.json'), JSON.stringify({
+    accountFilter: 'all', startDate: 'not-a-date', endDate: 'also-bad'
+  }));
+
+  const instance = await backend.activate({ dataDirectory: tmpDir, hostDataDir: tmpDir, homeDir: tmpDir, conversationDirs: [] });
+  const res = await instance.call('getSummary', {});
+  assert.equal(res.range.start, monthStart, 'an invalid persisted start must fall back to the first day of the month');
+  assert.equal(res.range.end, today, 'an invalid persisted end must fall back to today');
+
+  const requested = await instance.call('getSummary', { range: { start: 'not-a-date', end: '2026-10-20' } });
+  assert.equal(requested.range.start, monthStart, 'an invalid requested start must never become the range start');
+  assert.equal(requested.range.end, '2026-10-20', 'an invalid start must not flip the range end');
+  assert.notEqual(requested.range.start, 'not-a-date');
+  assert.notEqual(requested.range.end, 'not-a-date');
+
+  const prefsText = fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8');
+  assert.equal(prefsText.includes('not-a-date'), false, 'an invalid date must never be persisted');
+  const prefs = JSON.parse(prefsText);
+  assert.equal(String(prefs.startDate || ''), '');
+  assert.equal(String(prefs.range?.start || ''), '');
+  assert.equal(prefs.endDate, '2026-10-20');
+  instance.dispose?.();
+
+  const ignored = backend.aggregateAccountUsage({
+    calls: [{ day: '2026-01-05', timestampMs: Date.parse('2026-01-05T00:00:00Z'), model: 'm', inputTokens: 100, outputTokens: 0, costUsd: 0.1 }],
+    ledger: backend.createDefaultLedger('2026-01-01T00:00:00Z'),
+    quotaWindows: {},
+    range: { start: 'not-a-date', end: 'also-bad' },
+    accountFilter: 'all',
+    discoveredAccounts: []
+  });
+  assert.equal(ignored.overallTotalTokens, 100, 'an invalid range endpoint must be ignored instead of filtering everything out');
+});
+
+test('antigravity-account-ledger logs auto refresh failures without publishing dirty data', async (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-test-'));
+  t.after(() => removeTestDir(tmpDir));
+  const blockedParent = path.join(tmpDir, 'blocked');
+  fs.writeFileSync(blockedParent, 'not a directory');
+  fs.writeFileSync(path.join(tmpDir, backend.DEFAULT_LEDGER_FILENAME),
+    JSON.stringify(backend.createDefaultLedger('2026-01-01T00:00:00Z')));
+
+  const logs = [];
+  const published = [];
+  const instance = await backend.activate({
+    dataDirectory: path.join(blockedParent, 'plugin-data'),
+    hostDataDir: tmpDir,
+    homeDir: tmpDir,
+    conversationDirs: [],
+    publish: (value) => { published.push(value); },
+    log: (...args) => { logs.push(args); },
+    autoRefreshIntervalMs: 10
+  });
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  instance.dispose?.();
+
+  assert.ok(logs.length > 0, 'a failing auto refresh must reach the log callback');
+  assert.match(String(logs[0][0] || ''), /Auto refresh failed/);
+  assert.equal(published.length, 0, 'a failed auto refresh must not publish over the visible state');
+});
+
+test('antigravity-account-ledger shows the active account as a full width header row', async () => {
+  const { activate } = await import('../plugins/antigravity-account-ledger/ui.mjs');
+  const dom = installFakeDom();
+  try {
+    const container = new FakeElement('div');
+    const ui = activate({
+      backend: {
+        async call() { return summaryFixture(); },
+        subscribe() { return () => {}; }
+      }
+    });
+    const mounted = ui.mount(container, {});
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const root = container.querySelector('.ag-ledger-root');
+    const header = root.querySelector('.ag-ledger-header');
+    const badge = root.querySelector('.ag-ledger-badge');
+    assert.ok(badge);
+    assert.equal(badge.parentNode, header, 'the badge must be a direct child of the header');
+    assert.equal(badge.textContent, 'user@example.com', 'the badge must show the full account address');
+    assert.equal(badge.textContent.includes('Active:'), false);
+    assert.equal(badge.title, 'user@example.com');
+    mounted.dispose();
+
+    const emptyContainer = new FakeElement('div');
+    const emptyUi = activate({
+      backend: {
+        async call() { return { ...summaryFixture(), activeAccount: null }; },
+        subscribe() { return () => {}; }
+      }
+    });
+    const emptyMounted = emptyUi.mount(emptyContainer, {});
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const emptyBadge = emptyContainer.querySelector('.ag-ledger-badge');
+    assert.ok(emptyBadge);
+    assert.equal(emptyBadge.textContent, '未检测到活跃账号');
+    assert.equal(emptyBadge.title, '');
+    emptyMounted.dispose();
+  } finally {
+    dom.restore();
+  }
+});
+
+test('antigravity-account-ledger keeps the collapsed card frame and the badge grid rules', () => {
+  const css = fs.readFileSync(path.join(pluginDir, 'styles.css'), 'utf8');
+  assert.equal(css.includes('max-width: 150px'), false, 'the badge must not be capped at 150px any more');
+  const collapsed = cssBlock(css, '.ag-ledger-root.surface-home.is-collapsed');
+  assert.ok(collapsed, 'the collapsed home surface rule must exist');
+  assert.equal(collapsed.includes('border: none'), false, 'the collapsed card must keep its border');
+  assert.equal(collapsed.includes('background: transparent'), false, 'the collapsed card must keep its background');
+  assert.match(collapsed, /padding:\s*8px 12px;/);
+  const badgeGrid = cssBlock(css, '.ag-ledger-header > .ag-ledger-badge');
+  assert.ok(badgeGrid, 'the header badge grid rule must exist');
+  assert.match(badgeGrid, /grid-column:\s*1 \/ -1;/);
+  const header = cssBlock(css, '.ag-ledger-header');
+  assert.match(header, /grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
+  assert.equal(css.includes('.surface-page'), false);
+  assert.equal(css.includes('.home-module-plugin'), false);
+  assert.equal(css.includes('!important'), false);
 });
