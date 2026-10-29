@@ -16,6 +16,17 @@ test('antigravity-account-ledger ships 0.1.0 changelog summaries across all 6 lo
   assert.equal(Object.keys(notes).length, 6);
 });
 
+test('antigravity-account-ledger restricts view surfaces and defaultSurfaces to home only', () => {
+  const root = new URL('../plugins/antigravity-account-ledger/', import.meta.url);
+  const manifest = JSON.parse(fs.readFileSync(new URL('manifest.json', root), 'utf8'));
+  assert.deepEqual(manifest.views[0].surfaces, ['home']);
+  assert.deepEqual(manifest.views[0].defaultSurfaces, ['home']);
+  const uiSource = fs.readFileSync(new URL('ui.mjs', root), 'utf8');
+  const cssSource = fs.readFileSync(new URL('styles.css', root), 'utf8');
+  assert.equal(uiSource.includes('headerActions'), false);
+  assert.equal(cssSource.includes('.surface-page'), false);
+});
+
 test('antigravity-account-ledger backend activates and computes range summaries with isolated storage', async (t) => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-ledger-test-'));
   t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
