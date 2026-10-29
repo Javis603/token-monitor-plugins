@@ -31,6 +31,7 @@
     "README.ko.md",
     "README.ja.md",
     "README.pt-BR.md",
+    "scanner.cjs",
     "backend.cjs",
     "ui.mjs",
     "styles.css",
