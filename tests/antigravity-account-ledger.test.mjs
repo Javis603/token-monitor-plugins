@@ -1616,11 +1616,14 @@ test('antigravity-account-ledger persists only the start date and follows the cu
     range: { start: '2026-09-01', end: '2026-09-15' }
   }), 'utf8');
 
+  const published = [];
   const instance = await backend.activate({
     dataDirectory: tmpDir,
     hostDataDir: tmpDir,
     homeDir: tmpDir,
-    conversationDirs: []
+    conversationDirs: [],
+    autoRefreshIntervalMs: 30,
+    publish: (value) => published.push(value)
   });
   t.after(() => instance.dispose());
 
@@ -1640,6 +1643,10 @@ test('antigravity-account-ledger persists only the start date and follows the cu
     startDate: '2026-10-01',
     range: { start: '2026-10-01' }
   });
+
+  await tick(200);
+  assert.ok(published.length >= 1);
+  assert.equal(published[published.length - 1].range.end, '2026-10-20');
 
   const reopened = await instance.call('getSummary', {});
   assert.equal(reopened.range.start, '2026-10-01');
