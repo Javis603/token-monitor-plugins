@@ -183,7 +183,8 @@ test('antigravity-account-ledger backend computes range summaries, coverage, and
   }
   assert.equal(typeof res.summary.overallCostUsd, 'number');
   const prefs = JSON.parse(fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8'));
-  assert.deepEqual(prefs, { accountFilter: 'all', range: { start: '2026-10-01', end: '2026-10-29' } });
+  assert.deepEqual(prefs, { accountFilter: 'all', startDate: '2026-10-01', range: { start: '2026-10-01' } });
+  assert.equal('end' in prefs.range, false);
   await assert.rejects(instance.call('assignDateRange', {}), /Unknown method/);
   instance.dispose?.();
 });
@@ -1386,7 +1387,8 @@ test('antigravity-account-ledger auto refresh publishes on a timer, respects vis
   await instance.call('getSummary', { range: { start: '2026-10-01', end: '2026-10-29' }, accountFilter: 'all' });
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8')), {
     accountFilter: 'all',
-    range: { start: '2026-10-01', end: '2026-10-29' }
+    startDate: '2026-10-01',
+    range: { start: '2026-10-01' }
   });
 
   await tick(150);
@@ -1473,10 +1475,11 @@ test('antigravity-account-ledger UI adopts persisted filters and refreshes silen
     assert.equal(root.classList.contains('hidden'), false);
     assert.equal(calls.length, 2);
     assert.deepEqual(calls[1].payload, {
-      range: { start: '2026-09-01', end: '2026-09-30' },
+      range: { start: '2026-09-01', end: backend.localDayKey() },
       accountFilter: 'persisted@example.com',
       auto: true
     });
+    assert.equal(dateInputs[1].value, backend.localDayKey());
     assert.equal(banner.classList.contains('hidden'), true);
     assert.equal(banner.textContent, '');
     assert.equal(root.querySelectorAll('.ag-ledger-kpi-card').length, 3);
@@ -1601,6 +1604,95 @@ test('antigravity-account-ledger UI sizes the empty model row to the cache-write
 
   const styles = fs.readFileSync(new URL('../plugins/antigravity-account-ledger/styles.css', import.meta.url), 'utf8');
   assert.match(styles, /\.surface-home \.ag-ledger-kpi-breakdown\s*\{[^}]*grid-column:\s*1 \/ -1;/);
+});
+
+test('antigravity-account-ledger persists only the start date and follows the current day for the end date', async (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-startdate-test-'));
+  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  const today = backend.localDayKey();
+
+  fs.writeFileSync(path.join(tmpDir, 'preferences.json'), JSON.stringify({
+    accountFilter: 'persisted@example.com',
+    range: { start: '2026-09-01', end: '2026-09-15' }
+  }), 'utf8');
+
+  const instance = await backend.activate({
+    dataDirectory: tmpDir,
+    hostDataDir: tmpDir,
+    homeDir: tmpDir,
+    conversationDirs: []
+  });
+  t.after(() => instance.dispose());
+
+  const res = await instance.call('getSummary', {});
+  assert.equal(res.range.start, '2026-09-01');
+  assert.equal(res.range.end, today);
+  assert.equal(res.accountFilter, 'persisted@example.com');
+
+  const locked = await instance.call('getSummary', {
+    range: { start: '2026-10-01', end: '2026-10-20' },
+    accountFilter: 'all'
+  });
+  assert.equal(locked.range.start, '2026-10-01');
+  assert.equal(locked.range.end, '2026-10-20');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(tmpDir, 'preferences.json'), 'utf8')), {
+    accountFilter: 'all',
+    startDate: '2026-10-01',
+    range: { start: '2026-10-01' }
+  });
+
+  const reopened = await instance.call('getSummary', {});
+  assert.equal(reopened.range.start, '2026-10-01');
+  assert.equal(reopened.range.end, today);
+});
+
+test('antigravity-account-ledger UI keeps the end date on today unless the user locks it', async () => {
+  const { activate } = await import('../plugins/antigravity-account-ledger/ui.mjs');
+  const dom = installFakeDom();
+  try {
+    const calls = [];
+    const ui = activate({
+      backend: {
+        async call(method, payload) {
+          calls.push({ method, payload });
+          return {
+            summary: { ...summaryFixture().summary },
+            discoveredAccounts: [],
+            activeAccount: null,
+            accountFilter: 'all',
+            range: { start: '2026-09-01', end: '2026-09-30' }
+          };
+        },
+        subscribe() { return () => {}; }
+      }
+    });
+    const container = new FakeElement('div');
+    const mounted = ui.mount(container, {});
+    const root = container.querySelector('.ag-ledger-root');
+    const dateInputs = root.querySelectorAll('.ag-ledger-date');
+    await tick(20);
+    assert.equal(dateInputs[1].value, '2026-09-30');
+
+    mounted.update({ visible: false });
+    mounted.update({ visible: true });
+    await tick(20);
+    assert.equal(calls[calls.length - 1].payload.range.end, backend.localDayKey());
+    assert.equal(dateInputs[1].value, backend.localDayKey());
+
+    dateInputs[1].value = '2026-10-20';
+    dispatch(dateInputs[1], 'change');
+    await tick(20);
+    assert.equal(calls[calls.length - 1].payload.range.end, '2026-10-20');
+
+    mounted.update({ visible: false });
+    mounted.update({ visible: true });
+    await tick(20);
+    assert.equal(calls[calls.length - 1].payload.range.end, '2026-10-20');
+    assert.equal(calls[calls.length - 1].payload.auto, true);
+    mounted.dispose();
+  } finally {
+    dom.restore();
+  }
 });
 
 test('antigravity-account-ledger documentation does not advertise attribution coverage', () => {
