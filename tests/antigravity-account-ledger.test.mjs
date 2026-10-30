@@ -24,6 +24,22 @@ function removeTestDir(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); } catch (_) {}
 }
 
+function redirectTempRoot(t, tempRoot) {
+  const prevTmpDir = process.env.TMPDIR;
+  const prevTemp = process.env.TEMP;
+  const prevTmp = process.env.TMP;
+  process.env.TMPDIR = tempRoot;
+  process.env.TEMP = tempRoot;
+  process.env.TMP = tempRoot;
+  const restore = () => {
+    if (prevTmpDir === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = prevTmpDir;
+    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
+    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
+  };
+  if (t) t.after(restore);
+  return restore;
+}
+
 function listPluginFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => (
     entry.isDirectory() ? listPluginFiles(path.join(dir, entry.name)) : [path.join(dir, entry.name)]
@@ -955,15 +971,8 @@ test('antigravity-account-ledger snapshots WAL databases without copying invalid
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-wal-test-'));
   const tempRoot = path.join(tmpDir, 'temp');
   fs.mkdirSync(tempRoot, { recursive: true });
-  const prevTemp = process.env.TEMP;
-  const prevTmp = process.env.TMP;
-  process.env.TEMP = tempRoot;
-  process.env.TMP = tempRoot;
-  t.after(() => {
-    process.env.TEMP = prevTemp;
-    process.env.TMP = prevTmp;
-    removeTestDir(tmpDir);
-  });
+  redirectTempRoot(t, tempRoot);
+  t.after(() => { removeTestDir(tmpDir); });
 
   const dbPath = createConversationDb(tmpDir, 'conv-wal.db', {
     gens: [{ idx: 1, data: makeGenData({ usageBuf: makeUsageStats({ responseId: 'resp-wal' }), stepIndexes: [1] }) }]
@@ -2118,15 +2127,8 @@ test('antigravity-account-ledger removes the database snapshot directory when th
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-snap-close-'));
   const tempRoot = path.join(tmpDir, 'temp');
   fs.mkdirSync(tempRoot);
-  const prevTemp = process.env.TEMP;
-  const prevTmp = process.env.TMP;
-  process.env.TEMP = tempRoot;
-  process.env.TMP = tempRoot;
-  t.after(() => {
-    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
-    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
-    removeTestDir(tmpDir);
-  });
+  redirectTempRoot(t, tempRoot);
+  t.after(() => { removeTestDir(tmpDir); });
   const dbPath = createConversationDb(tmpDir, 'conv-snap.db', {
     gens: [{ idx: 1, data: makeGenData({ usageBuf: makeUsageStats({ responseId: 'resp-snap' }), stepIndexes: [1] }) }]
   });
@@ -2144,15 +2146,8 @@ test('antigravity-account-ledger removes the database snapshot directory when th
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-snap-fail-'));
   const tempRoot = path.join(tmpDir, 'temp');
   fs.mkdirSync(tempRoot);
-  const prevTemp = process.env.TEMP;
-  const prevTmp = process.env.TMP;
-  process.env.TEMP = tempRoot;
-  process.env.TMP = tempRoot;
-  t.after(() => {
-    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
-    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
-    removeTestDir(tmpDir);
-  });
+  redirectTempRoot(t, tempRoot);
+  t.after(() => { removeTestDir(tmpDir); });
   const dbPath = path.join(tmpDir, 'broken.db');
   fs.mkdirSync(dbPath);
   assert.equal(backend.openConversationDbWithFallback(dbPath), null);
@@ -2164,15 +2159,8 @@ test('antigravity-account-ledger reclaims orphaned database snapshots older than
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-snap-orphan-'));
   const tempRoot = path.join(tmpDir, 'temp');
   fs.mkdirSync(tempRoot);
-  const prevTemp = process.env.TEMP;
-  const prevTmp = process.env.TMP;
-  process.env.TEMP = tempRoot;
-  process.env.TMP = tempRoot;
-  t.after(() => {
-    if (prevTemp === undefined) delete process.env.TEMP; else process.env.TEMP = prevTemp;
-    if (prevTmp === undefined) delete process.env.TMP; else process.env.TMP = prevTmp;
-    removeTestDir(tmpDir);
-  });
+  redirectTempRoot(t, tempRoot);
+  t.after(() => { removeTestDir(tmpDir); });
   const orphan = path.join(tempRoot, 'ag-db-snap-orphan');
   const fresh = path.join(tempRoot, 'ag-db-snap-fresh');
   const unrelated = path.join(tempRoot, 'ag-db-scan-keep');
@@ -2310,4 +2298,29 @@ test('antigravity-account-ledger keeps the collapsed card frame and the badge gr
   assert.equal(css.includes('.surface-page'), false);
   assert.equal(css.includes('.home-module-plugin'), false);
   assert.equal(css.includes('!important'), false);
+});
+
+test('antigravity-account-ledger restores unset temp env vars instead of the literal string undefined', () => {
+  const saved = { tmpdir: process.env.TMPDIR, temp: process.env.TEMP, tmp: process.env.TMP };
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-temp-env-'));
+  const tempRoot = path.join(tmpDir, 'temp');
+  fs.mkdirSync(tempRoot);
+  try {
+    delete process.env.TMPDIR;
+    delete process.env.TEMP;
+    delete process.env.TMP;
+    const restore = redirectTempRoot(null, tempRoot);
+    assert.equal(process.env.TMPDIR, tempRoot);
+    assert.equal(process.env.TEMP, tempRoot);
+    assert.equal(process.env.TMP, tempRoot);
+    restore();
+    assert.equal(process.env.TMPDIR, undefined, 'an unset TMPDIR must be removed, not restored as the string "undefined"');
+    assert.equal(process.env.TEMP, undefined, 'an unset TEMP must be removed, not restored as the string "undefined"');
+    assert.equal(process.env.TMP, undefined, 'an unset TMP must be removed, not restored as the string "undefined"');
+  } finally {
+    if (saved.tmpdir === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved.tmpdir;
+    if (saved.temp === undefined) delete process.env.TEMP; else process.env.TEMP = saved.temp;
+    if (saved.tmp === undefined) delete process.env.TMP; else process.env.TMP = saved.tmp;
+    removeTestDir(tmpDir);
+  }
 });
