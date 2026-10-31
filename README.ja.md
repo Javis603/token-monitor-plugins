@@ -15,6 +15,7 @@
 | プラグイン | 説明 | バージョン |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.ja.md) | ローカルのリアルタイムルーティングとコンテキストを表示。 | `0.1.0` |
+| [Antigravity Account Ledger](plugins/antigravity-account-ledger/README.ja.md) | Googleアカウントとカスタム期間別のAntigravityトークン使用量・コスト台帳。 | `0.1.0` |
 
 ## インストール
 

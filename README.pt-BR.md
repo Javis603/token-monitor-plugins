@@ -15,6 +15,7 @@ Plugins mantidos pela comunidade para o [Token Monitor](https://github.com/Javis
 | Plugin | Descrição | Versão |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.pt-BR.md) | Visualizações locais de roteamento e contexto em tempo real. | `0.1.0` |
+| [Antigravity Account Ledger](plugins/antigravity-account-ledger/README.pt-BR.md) | Registro de uso de tokens e custos do Antigravity por conta Google e intervalo de datas. | `0.1.0` |
 
 ## Instalação
 
