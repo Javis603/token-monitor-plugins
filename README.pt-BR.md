@@ -25,6 +25,7 @@ Em **Configurações → Plugins → Instalar de arquivo**, importe a pasta comp
 As ferramentas de desenvolvimento exigem Node 22.15+. Não há dependências npm em tempo de execução. O build usa o validador de pacotes de um checkout do Token Monitor; `--local-only` gera pacotes de teste sem publicar.
 
 ```sh
+npm ci --ignore-scripts
 npm test
 npm run check -- --host /path/to/token-monitor
 npm run build -- --host /path/to/token-monitor --local-only

@@ -48,3 +48,45 @@ test('corrupt and local-only build outputs cannot be published', t => {
   built.localOnly = true; fs.writeFileSync(file, JSON.stringify(built));
   assert.throws(() => stageDistribution(f.source, f.target), /Local-only/);
 });
+
+test('the 33rd release retains the newest 32 versions and leaves evicted packages immutable', t => {
+  const f = fixture(t);
+  for (let version = 1; version <= 33; version++) {
+    f.build(`0.${version}.0`); stageDistribution(f.source, f.target);
+  }
+  const versions = f.index().plugins[0].versions;
+  assert.equal(versions.length, 32);
+  assert.equal(versions[0].version, '0.33.0');
+  assert.equal(versions.at(-1).version, '0.2.0');
+  const file = path.join(f.target, 'magpie-routes-0.1.0.tmplugin');
+  assert.equal(fs.readFileSync(file, 'utf8'), '0.1.0');
+  const before = fs.readFileSync(path.join(f.target, 'catalog.json'));
+  f.build('0.1.0', 'changed evicted package');
+  assert.throws(() => stageDistribution(f.source, f.target), /refusing to overwrite/);
+  assert.deepEqual(fs.readFileSync(path.join(f.target, 'catalog.json')), before);
+  assert.equal(fs.readFileSync(file, 'utf8'), '0.1.0');
+});
+
+test('an incoming release outside the retained range fails before any distribution writes', t => {
+  const f = fixture(t);
+  for (let version = 2; version <= 33; version++) {
+    f.build(`0.${version}.0`); stageDistribution(f.source, f.target);
+  }
+  const before = fs.readFileSync(path.join(f.target, 'catalog.json'));
+  const files = fs.readdirSync(f.target).sort();
+  f.build('0.1.1');
+  assert.throws(() => stageDistribution(f.source, f.target), /outside the newest 32 catalog versions/);
+  assert.deepEqual(fs.readFileSync(path.join(f.target, 'catalog.json')), before);
+  assert.deepEqual(fs.readdirSync(f.target).sort(), files);
+});
+
+test('history uses SemVer order for patch, minor and prerelease versions', t => {
+  const f = fixture(t);
+  for (const version of ['0.9.0', '0.10.0', '0.10.1', '1.0.0-beta.2', '1.0.0-beta.10', '1.0.0']) {
+    f.build(version); stageDistribution(f.source, f.target);
+  }
+  f.build('0.10.2'); stageDistribution(f.source, f.target);
+  assert.deepEqual(f.index().plugins[0].versions.map(v => v.version), [
+    '1.0.0', '1.0.0-beta.10', '1.0.0-beta.2', '0.10.2', '0.10.1', '0.10.0', '0.9.0'
+  ]);
+});

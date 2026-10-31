@@ -26,6 +26,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Install publishing dependencies
+        working-directory: source
+        run: npm ci --ignore-scripts
       - name: Install host validation dependencies
         working-directory: host
         run: npm ci --ignore-scripts
@@ -54,6 +57,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Install publishing dependencies
+        run: npm ci --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
           name: plugin-distribution

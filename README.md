@@ -25,6 +25,7 @@ Import a complete plugin folder or `.tmplugin` through **Settings → Plugins �
 Development tools require Node 22.15+. There are no npm runtime dependencies. Build commands reuse a Token Monitor checkout’s package validator; `--local-only` outputs test packages without publishing.
 
 ```sh
+npm ci --ignore-scripts
 npm test
 npm run check -- --host /path/to/token-monitor
 npm run build -- --host /path/to/token-monitor --local-only

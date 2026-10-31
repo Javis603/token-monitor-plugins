@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import semver from 'semver';
 import { option } from './common.mjs';
 
 // Stage locally; only the workflow's final git push publishes these files.
@@ -28,8 +29,14 @@ export function stageDistribution(source, target) {
         if (!fs.readFileSync(file).equals(bytes)) throw Error(`${entry.filename}: refusing to overwrite a published package`);
       } else copies.push({ file, bytes });
     }
-    // Retain older versions and their packages for selection and recovery.
-    plugin.versions.push(...(old?.versions || []).filter(v => !plugin.versions.some(current => current.version === v.version)));
+    const retained = [...plugin.versions, ...(old?.versions || []).filter(v => !plugin.versions.some(current => current.version === v.version))]
+      .sort((a, b) => semver.rcompare(a.version, b.version)).slice(0, 32);
+    for (const version of plugin.versions) {
+      if (!retained.some(entry => entry.version === version.version)) {
+        throw Error(`${plugin.id}@${version.version}: outside the newest 32 catalog versions; refusing an undiscoverable release`);
+      }
+    }
+    plugin.versions = retained;
   }
   fs.mkdirSync(target, { recursive: true });
   for (const { file, bytes } of copies) fs.writeFileSync(file, bytes, { flag: 'wx' });

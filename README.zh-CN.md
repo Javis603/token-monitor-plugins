@@ -25,6 +25,7 @@
 开发工具需要 Node 22.15+，没有 npm runtime 依赖。构建复用 Token Monitor checkout 的套件验证器；`--local-only` 只生成测试包，不会发布。
 
 ```sh
+npm ci --ignore-scripts
 npm test
 npm run check -- --host /path/to/token-monitor
 npm run build -- --host /path/to/token-monitor --local-only

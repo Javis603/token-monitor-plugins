@@ -25,6 +25,7 @@
 개발 도구에는 Node 22.15+가 필요하며 npm 런타임 의존성은 없습니다. 빌드는 Token Monitor 소스의 패키지 검증기를 사용합니다. `--local-only`는 게시 없이 테스트 패키지만 생성합니다.
 
 ```sh
+npm ci --ignore-scripts
 npm test
 npm run check -- --host /path/to/token-monitor
 npm run build -- --host /path/to/token-monitor --local-only

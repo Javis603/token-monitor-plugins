@@ -15,7 +15,7 @@
 
 Catalog URL：`https://raw.githubusercontent.com/Javis603/token-monitor-plugins/dist/catalog.json`。套件與目錄同一次 commit 發布，使用直接回傳 bytes 的 raw URL；宿主不跟隨 Release 下載重新導向。
 
-已發布套件不可覆蓋。同版本相同 bytes 可以重跑；同版本不同 bytes 會停止，須先提升該插件的版本。新目錄保留較舊版本與套件，供版本選擇及恢復使用。首次公開前的本機候選修改可以維持 `0.1.0`，不用為準備過程逐次升版。
+已發布套件不可覆蓋。同版本相同 bytes 可以重跑；同版本不同 bytes 會停止，須先提升該插件的版本。目錄按 SemVer 保留最新 32 個版本；排不入此範圍的發布會被拒絕。較舊套件仍保留在 `dist`，不可覆蓋。首次公開前的本機候選修改可以維持 `0.1.0`，不用為準備過程逐次升版。
 
 ## 更新插件
 
@@ -26,6 +26,7 @@ Catalog URL：`https://raw.githubusercontent.com/Javis603/token-monitor-plugins/
 ## 本機檢查與打包
 
 ```sh
+npm ci --ignore-scripts
 npm test
 npm run check -- --host /path/to/token-monitor
 npm run build -- --host /path/to/token-monitor --local-only
