@@ -2188,9 +2188,10 @@ test('antigravity-account-ledger drops invalid persisted and requested date rang
   assert.equal(res.range.start, monthStart, 'an invalid persisted start must fall back to the first day of the month');
   assert.equal(res.range.end, today, 'an invalid persisted end must fall back to today');
 
-  const requested = await instance.call('getSummary', { range: { start: 'not-a-date', end: '2026-10-20' } });
+  const explicitEnd = today === `${today.slice(0, 7)}-28` ? `${today.slice(0, 7)}-27` : `${today.slice(0, 7)}-28`;
+  const requested = await instance.call('getSummary', { range: { start: 'not-a-date', end: explicitEnd } });
   assert.equal(requested.range.start, monthStart, 'an invalid requested start must never become the range start');
-  assert.equal(requested.range.end, '2026-10-20', 'an invalid start must not flip the range end');
+  assert.equal(requested.range.end, explicitEnd, 'an invalid start must not flip the range end');
   assert.notEqual(requested.range.start, 'not-a-date');
   assert.notEqual(requested.range.end, 'not-a-date');
 
@@ -2199,7 +2200,7 @@ test('antigravity-account-ledger drops invalid persisted and requested date rang
   const prefs = JSON.parse(prefsText);
   assert.equal(String(prefs.startDate || ''), '');
   assert.equal(String(prefs.range?.start || ''), '');
-  assert.equal(prefs.endDate, '2026-10-20');
+  assert.equal(prefs.endDate, explicitEnd);
   instance.dispose?.();
 
   const ignored = backend.aggregateAccountUsage({
