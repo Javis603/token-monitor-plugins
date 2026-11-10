@@ -36,14 +36,12 @@
 .rr-context .ctx-state-w > span:not(.on) { visibility: hidden; }
 @keyframes ctx-pulse { 50% { opacity: .35; transform: scale(.8); } }
 .rr-context .ctx-k { display: flex; align-items: center; gap: 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
-.rr-context :root[lang="zh"] .ctx-k, .rr-context :root[lang="ja"] .ctx-k { letter-spacing: .02em; }
 .rr-context .ctx-top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px 28px; }
 .rr-context .ctx-top > :only-child { grid-column: 1 / -1; }
 .rr-context .ctx-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .rr-context .ctx-big { display: flex; align-items: baseline; gap: .35em; white-space: nowrap; color: var(--muted); font-size: 13px; }
 .rr-context .ctx-big b { font-size: 28px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em; color: var(--fg); }
 .rr-context .ctx-sub { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rr-context :root[lang="zh"] .ctx-sub, .rr-context :root[lang="ja"] .ctx-sub { letter-spacing: .02em; }
 .rr-context .ctx-health { height: 17px; display: inline-flex; align-items: center; padding: 0 7px; border-radius: 9px; font-size: 10px; letter-spacing: .03em; }
 .rr-context .ctx-health.ok { background: var(--green-soft); color: var(--green); }
 .rr-context .ctx-health.warn { background: var(--amber-soft); color: var(--amber); }
