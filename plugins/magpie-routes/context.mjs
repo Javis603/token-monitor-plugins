@@ -847,7 +847,7 @@ function stackBar(p) {
       const cache = cacheOf(r) || opts.cache;
       // another agent or session drawn in the card has no last request's
       // cache to show: its place stays, with a dash till it is read
-      const whose = r.agent + " " + (opts.series?.[0]?.id ?? "");
+      const whose = r.agent + " " + (r.sessionKey || r.id);
       if (whose !== cacheWhose) lastCache = null;
       cacheWhose = whose;
       const known = cache && p.counted !== false ? cache : null;

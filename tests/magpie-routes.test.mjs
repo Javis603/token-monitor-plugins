@@ -94,3 +94,26 @@ test('upstream routing modes and retry failures render from the projected DTO', 
     assert.ok(routingDescription(mode).length>0);
   }
 });
+
+test('routing explanations preserve reserve, account restrictions, credits and price facts', async () => {
+  const { storyItems } = await import('../plugins/magpie-routes/story.mjs');
+  const first = {id:'a',provider:'deepseek',name:'First',model:'deepseek-flash',kind:'key',routing:'order',rank:1};
+  const raw = {id:1,time:'2026-11-10T00:00:00Z',agent:'dsh',model:'deepseek-flash',provider:'deepseek',order:[first],tries:[],left:[]};
+  const project = changes => gateway.trace({object:'trace',seq:1,pid:1,ids:[1],routes:[{...raw,...changes}],totals:{}}).routes[0];
+  const words = row => storyItems(row,false).map(([s])=>s).join('\n');
+  const reserved = project({order:[first,{...first,id:'b',name:'Reserved',rank:2,aside:true,reserve:2}]});
+  assert.match(words(reserved),/Reserved is in reserve: 2/);
+  assert.doesNotMatch(words(reserved),/Reserved is made for/);
+  for (const heldOwn of [false,true]) {
+    const held = project({left:[{...first,id:'b',name:'Restricted',held:true,heldBy:'Team group',heldOwn}]});
+    assert.match(words(held),heldOwn ? /Team group names another account/ : /routing group Team group is held to other accounts/);
+    assert.doesNotMatch(words(held),/gateway key asking may not use/);
+  }
+  const credits = project({order:[{...first,creditsLast:true},{...first,id:'b',creditsLast:true}]});
+  assert.match(words(credits),/set to spend them only after everything else/);
+  const expiry = project({order:[{...first,routing:'expiring',free:true,expires:'2026-11-11T00:00:00Z'},{...first,id:'b'}]});
+  assert.equal(expiry.order[0].expires,'2026-11-11T00:00:00Z');
+  assert.match(words(expiry),/free quota is lost soonest/);
+  const peak = project({order:[{...first,routing:'cheap',price:{input:1,output:2,peak:true}},{...first,id:'b'}]});
+  assert.match(words(peak),/even at its peak price/);
+});

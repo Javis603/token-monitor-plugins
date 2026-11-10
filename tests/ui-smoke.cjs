@@ -83,6 +83,22 @@ app.whenReady().then(async () => {
     root.querySelector('.ctx-tile.k-files')?.click();
     check('context-inspects-metadata-only',root.querySelector('.ctx-contents').textContent.includes('demo.ts'));
 
+    const restore=structuredClone(nextMagpie);
+    const auxiliary=structuredClone(nextMagpie.routes[0]);
+    auxiliary.kind='compact';auxiliary.done=true;auxiliary.sessionKey='aux-session-a';
+    auxiliary.usage=[{in:50,cache_read:50}];auxiliary.prompt.counted=true;
+    nextMagpie.routes=[auxiliary];pushMagpie(nextMagpie);
+    const cacheText=()=>root.querySelector('.ctx-cache .ctx-big b')?.textContent;
+    check('aux-context-records-session-cache',cacheText()==='50%');
+    auxiliary.id++;auxiliary.done=false;auxiliary.usage=[];auxiliary.prompt.counted=false;pushMagpie(nextMagpie);
+    check('aux-context-retains-same-session-cache',cacheText()==='50%');
+    auxiliary.id++;auxiliary.sessionKey='aux-session-b';pushMagpie(nextMagpie);
+    check('aux-context-does-not-leak-other-session-cache',cacheText()==='—');
+    auxiliary.sessionKey='';auxiliary.done=true;auxiliary.usage=[{in:50,cache_read:50}];auxiliary.prompt.counted=true;pushMagpie(nextMagpie);
+    auxiliary.id++;auxiliary.done=false;auxiliary.usage=[];auxiliary.prompt.counted=false;pushMagpie(nextMagpie);
+    check('aux-context-without-session-isolates-requests',cacheText()==='—');
+    pushMagpie(restore);
+
     check('magpie-page-uses-header-outlet',header.children.length>0);
   })()`);
   await win.webContents.executeJavaScript('new Promise(r=>setTimeout(r,150))');

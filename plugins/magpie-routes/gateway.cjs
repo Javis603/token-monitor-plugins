@@ -68,10 +68,10 @@ function rule(raw) {
 }
 function candidate(item) {
   return {
-    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset'],
-      ['rank','pace','fit','tokens','lateTtft','lateTps','window','capped','amount','limit','balance','unreached'], ['turn','held','barred','fallback','aside','known','free','learns','noCredits','credits','unlisted','fast','shared','weekLow','useFirst'], ['renews','via','soon']),
+    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset','expires','heldBy'],
+      ['rank','pace','fit','tokens','lateTtft','lateTps','window','capped','amount','limit','balance','unreached','reserve'], ['turn','held','barred','fallback','aside','known','free','learns','noCredits','credits','unlisted','fast','shared','weekLow','useFirst','creditsLast','heldOwn'], ['renews','via','soon']),
     usedPercent: number(item.used), rest: rest(item.rest),
-    price: fields(item.price, [], ['input','output'])
+    price: fields(item.price, [], ['input','output'], ['peak'])
   };
 }
 function prompt(raw) {
