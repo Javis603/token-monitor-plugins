@@ -98,9 +98,26 @@ app.whenReady().then(async () => {
     auxiliary.id++;auxiliary.done=false;auxiliary.usage=[];auxiliary.prompt.counted=false;pushMagpie(nextMagpie);
     check('aux-context-without-session-isolates-requests',cacheText()==='—');
     pushMagpie(restore);
+    window.sparkRestore=restore;
+    const history=structuredClone(restore),earlier=structuredClone(history.routes[0]);
+    earlier.id=0;earlier.prompt.tokens=6000;earlier.done=true;
+    history.routes.push(earlier);pushMagpie(history);
+    const point=root.querySelector('.ctx-spark .hit');
+    check('context-history-point-is-keyboard-button',point?.getAttribute('role')==='button'&&point.getAttribute('tabindex')==='0');
+    check('context-history-point-has-window-label',point.getAttribute('aria-label')===point.querySelector('title').textContent&&point.getAttribute('aria-label').includes('128K'));
+    point.focus();check('context-history-point-receives-focus',document.activeElement===point);
 
     check('magpie-page-uses-header-outlet',header.children.length>0);
   })()`);
+  win.webContents.focus();
+  for (const keyCode of ['Enter','Space']) {
+    if (keyCode==='Space') await win.webContents.executeJavaScript(`(()=>{document.querySelector('.rr-back-live').click();document.querySelector('.ctx-spark .hit').focus();})()`);
+    win.webContents.sendInputEvent({type:'keyDown',keyCode});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode});
+    await win.webContents.executeJavaScript(`new Promise(r=>setTimeout(r,30))`);
+    await win.webContents.executeJavaScript(`check('context-history-${keyCode}-selects-request',document.querySelector('.ctx-crumbs').textContent.includes('#0'))`);
+  }
+  await win.webContents.executeJavaScript(`document.querySelector('.rr-back-live').click();pushMagpie(sparkRestore)`);
   await win.webContents.executeJavaScript('new Promise(r=>setTimeout(r,150))');
   fs.writeFileSync(path.join(evidence, 'page-fixture.png'), (await win.webContents.capturePage()).toPNG());
   await win.webContents.executeJavaScript(`(async()=>{

@@ -218,6 +218,9 @@ function stackBar(p) {
       tip.textContent = w ? t("Request {n}: {tokens} of {window} ({pct})", { n: i + 1, tokens: fmtK(p.tokens), window: fmtK(w), pct: pct(p.tokens / w) })
         : t("Request {n}: {tokens} tokens", { n: i + 1, tokens: fmtK(p.tokens) });
       hit.append(tip);
+      hit.setAttribute("role", "button"); hit.setAttribute("tabindex", "0");
+      hit.setAttribute("aria-label", tip.textContent);
+      hit.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPoint(p); } };
       hit.onclick = (e) => { e.stopPropagation(); onPoint(p); };
     });
     return box;
