@@ -66,7 +66,7 @@ function routeStage(ctx,small = false) {
       let row = sourceRows.get(id);
       if (!row) {row=el('div','rr-node rr-source');row.dataset.agent=id;row.style.setProperty('--rr-agent',agentHue(id));row.append(brand(ctx,id),el('strong'),el('small'));sourceRows.set(id,row);}
       const route = staged.filter(route=>route.agent===id).at(-1);
-      row.children[1].textContent=agentName(id);row.children[2].textContent=route.model;row.children[2].title=route.model;
+      row.children[1].textContent=agentName(id);row.children[1].title=agentName(id);row.children[2].textContent=route.model;row.children[2].title=route.model;
       row.dataset.live=String(staged.some(route=>route.agent===id&&!route.done));
       if(sources.children[index]!==row)sources.insertBefore(row,sources.children[index]||null);
     });
@@ -165,7 +165,7 @@ export function createPage(container,ctx,actions) {
   const story=el('div','rr-story'),storyHead=el('strong'),storyView=createStory(ctx);
   story.append(storyHead,storyView.node);stageBox.append(mode,graph.node,foot,story); pageHeading.append(heading);
   tools.node.classList.add('rr-root','rr-header-tools');ctx.headerActions.append(tools.node);pageHeading.append(tools.agent);
-  const context=createContextView(actions);
+  const context=createContextView(actions,ctx);
   const history=el('section','rr-requests'),historyHead=el('div','rr-history-head'),historyCount=el('span'),recent=el('div','rr-history');
   historyHead.append(el('h3','',l("請求")),historyCount);history.append(historyHead,recent);
   const empty=el('p','rr-empty');root.append(notice,pageHeading,stageBox,empty,context.node,history);

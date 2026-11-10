@@ -47,7 +47,7 @@ const number = value => typeof value === 'number' && Number.isFinite(value) ? va
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 function rest(raw) {
   if (!object(raw)) return null;
-  return fields(raw, ['key','kind','why','until','by','model'], ['status','failures']);
+  return fields(raw, ['key','kind','why','until','by','model'], ['status','failures'], ['rate','probed']);
 }
 // Routing explanations are derived from structured trace facts, not a ready-made
 // sentence. Keep explicit display fields; prompt metadata is projected separately.
@@ -68,9 +68,10 @@ function rule(raw) {
 }
 function candidate(item) {
   return {
-    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent'],
-      ['rank','pace','fit','tokens','lateTtft','lateTps','window','capped'], ['turn','held','barred','fallback','aside','known','free','learns','noCredits','credits','unlisted','fast'], ['renews','via']),
-    usedPercent: number(item.used), rest: rest(item.rest)
+    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset'],
+      ['rank','pace','fit','tokens','lateTtft','lateTps','window','capped','amount','limit','balance','unreached'], ['turn','held','barred','fallback','aside','known','free','learns','noCredits','credits','unlisted','fast','shared','weekLow','useFirst'], ['renews','via','soon']),
+    usedPercent: number(item.used), rest: rest(item.rest),
+    price: fields(item.price, [], ['input','output'])
   };
 }
 function prompt(raw) {
@@ -92,16 +93,18 @@ function route(raw) {
   // never enter the renderer or this plugin's storage.
   return {
     id: raw.id, prompt: prompt(raw.prompt), sessionKey: sessionKey(raw), time: text(raw.time), agent: text(raw.agent, 100), model: text(raw.model), provider: text(raw.provider),
+    ...fields(raw, ['fail','tier','pinned'], [], ['canceled']),
+    moved: fields(raw.moved, ['to','why']),
     effort: text(raw.effort), kind: text(raw.kind), done: raw.done === true, status: number(raw.status), error: text(raw.error),
     phase: text(raw.phase), served: text(raw.served), ms: number(raw.ms), tokens: number(raw.tokens), out: number(raw.out),
     ...fields(raw, [], ['masking','ttft','firstText','flow','firstReasoning','reasoning'], ['reasoningHidden']),
     usage: Array.isArray(raw.usage) ? raw.usage.slice(0,128).map(item=>fields(item, ['provider','model'], ['in','out','cache_read','cache_write','reasoning'], ['cache_unknown'])) : [],
-    affinity: fields(raw.affinity, ['mode','why','last','at'], ['turn','lastTurn','cacheRead','cacheWrite'], ['within','kept']),
+    affinity: fields(raw.affinity, ['mode','why','last','at','leadModel'], ['turn','lastTurn','cacheRead','cacheWrite'], ['within','kept']),
     group: raw.group ? {...fields(raw.group, ['name','routing','affinity','id','ref'], [], ['auto','sink'], ['members','via','fast']),
       subs: Array.isArray(raw.group.subs) ? raw.group.subs.filter(object).slice(0,128).map(s=>fields(s,['id','ref','name','routing','in'],['rules'])) : [],
       paused: Array.isArray(raw.group.paused) ? raw.group.paused.filter(object).slice(0,128).map(p=>fields(p,['member','group','folder'],['rule'],['byFolder'],['when'])) : []} : null,
     for: fields(raw.for,['agent','model','instead','why','missing'],[],['mcp','picked','notSearched','nothingFound','unknown']),
-    subagent: fields(raw.subagent,['asked','to','kept']),subagentId:text(raw.subagentId),subagentEffort:text(raw.subagentEffort),
+    subagent: fields(raw.subagent,['asked','to','kept'],[],['lead']),subagentId:text(raw.subagentId),subagentEffort:text(raw.subagentEffort),
     rule: rule(raw.rule), nested: Array.isArray(raw.nested) ? raw.nested.slice(0,32).map(item => ({ group: text(item.group), name: text(item.name), rule: rule(item.rule) })) : [],
     sealedTask: raw.sealedTask === true, leadAccount: text(raw.leadAccount), compaction: text(raw.compaction),
     left: Array.isArray(raw.left) ? raw.left.slice(0,128).map(candidate) : [],
@@ -109,7 +112,7 @@ function route(raw) {
     tries: raw.tries.slice(0, 128).map(item => ({
       id: text(item.id), model: text(item.model), effort: text(item.effort), done: item.done === true,
       status: number(item.status), ms: number(item.ms), fail: text(item.fail), error: text(item.error), served: text(item.served), rest: rest(item.rest),
-      ...fields(item, ['start','fixed','ruleEffort','upstream','pin'], ['again','replan','patience','ttft','firstText','flow','firstReasoning','queued'], ['picked','gone','earlier','credits','reasoningHidden','swapped','routed']),
+      ...fields(item, ['start','fixed','ruleEffort','upstream','pin','sentBy','mappedFrom','tier','tierServed'], ['again','replan','patience','ttft','firstText','flow','firstReasoning','queued'], ['picked','gone','earlier','credits','reasoningHidden','swapped','routed','kept','fast']),
       reset: fields(item.reset,['who','text','agent']),
       auto: Array.isArray(item.auto) ? item.auto.filter(object).slice(0,128).map(p=>fields(p,['model','via','skipped','api','refused'],[],['session'])) : [],
       net: fields(item.net, [], ['own','before','pool','dns','connect','tls','send','wait','head'])

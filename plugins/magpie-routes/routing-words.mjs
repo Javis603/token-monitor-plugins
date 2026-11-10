@@ -1,121 +1,14 @@
+import {hitPct,fmtCost,countFormat} from './formats.mjs';
 import {t,locale} from './i18n.mjs';
-// Adapted verbatim from yetone/magpie f2b4b989 (MIT); see SOURCE-NOTICE.md.
+// Adapted from yetone/magpie 9c39edb92cab08eae43602f6a839baa4fc892b95 (MIT). See SOURCE-NOTICE.md.
 import {agentName,tried} from './model.mjs';
 import {took,timeSaid} from './timing.mjs';
-
 export const routingText=t;
 const now=()=>Date.now(),intlLang=locale,ctxShort=n=>n>=1000?Math.round(n/1000)+'k':String(n);
-// Custom JS routing descriptions require Magpie's GUI settings; trace metadata alone has no script registry.
+// GUI-only custom scripts and account renames are unavailable on the gateway trace.
 const jsRoutings=()=>[];
 export function sourceWords(route,displayName){
  const userShown=(_provider,name)=>displayName(name),whoShown=w=>displayName(w.who)||w.name||w.id;
-const REQUEST_KINDS = {
-  "agent_job": {
-    "purpose": "kind:collab_spawn",
-    "name": "Subagent"
-  },
-  "ambient_suggestion_safety": {
-    "purpose": "kind:ambient_suggestions",
-    "name": "Suggestions"
-  },
-  "ambient_suggestions": {
-    "purpose": "kind:ambient_suggestions",
-    "name": "Suggestions"
-  },
-  "api_detect": {
-    "purpose": "kind:api_detect",
-    "name": "Detect APIs"
-  },
-  "auto_review": {
-    "purpose": "kind:guardian",
-    "name": "Approval check"
-  },
-  "collab_spawn": {
-    "purpose": "kind:collab_spawn",
-    "name": "Subagent"
-  },
-  "compact": {
-    "purpose": "kind:compact",
-    "name": "Compaction"
-  },
-  "composer_predictions": {
-    "purpose": "kind:composer_predictions",
-    "name": "Prediction"
-  },
-  "guardian": {
-    "purpose": "kind:guardian",
-    "name": "Approval check"
-  },
-  "guardian_review": {
-    "purpose": "kind:guardian",
-    "name": "Approval check"
-  },
-  "luna_reserve": {
-    "purpose": "kind:luna_reserve",
-    "name": "Luna Reserve"
-  },
-  "memgen": {
-    "purpose": "kind:memory_consolidation",
-    "name": "Memory"
-  },
-  "memory": {
-    "purpose": "kind:memory_consolidation",
-    "name": "Memory"
-  },
-  "memory_consolidation": {
-    "purpose": "kind:memory_consolidation",
-    "name": "Memory"
-  },
-  "model_list": {
-    "purpose": "kind:model_list",
-    "name": "Model list"
-  },
-  "provider_test": {
-    "purpose": "kind:provider_test",
-    "name": "Test"
-  },
-  "review": {
-    "purpose": "kind:review",
-    "name": "Review"
-  },
-  "routing": {
-    "purpose": "kind:routing",
-    "name": "Routing classifier"
-  },
-  "thread_description": {
-    "purpose": "kind:thread_description",
-    "name": "Description"
-  },
-  "thread_spawn": {
-    "purpose": "kind:collab_spawn",
-    "name": "Subagent"
-  },
-  "thread_title": {
-    "purpose": "kind:thread_title",
-    "name": "Title"
-  },
-  "thread_title_reconsideration": {
-    "purpose": "kind:thread_title",
-    "name": "Title"
-  },
-  "title": {
-    "purpose": "kind:thread_title",
-    "name": "Title"
-  },
-  "title_generation": {
-    "purpose": "kind:thread_title",
-    "name": "Title"
-  },
-  "vision": {
-    "purpose": "kind:vision",
-    "name": "Image description"
-  },
-  "web_search": {
-    "purpose": "kind:web_search",
-    "name": "Web search"
-  }
-};
-
 const atOf = new Map();
 
 const at = (s) => {
@@ -141,7 +34,11 @@ function dur(ms) {
     return t("{n} d", { n: Math.round(m / 1440) });
   }
 
-let fmtLang = null, HM, WD;
+let fmtLang = null;
+
+let HM;
+
+let WD;
 
 function clock(s) {
     const d = new Date(s), n = new Date();
@@ -161,6 +58,7 @@ function decodeOf(r, ms, ttft, firstText, flow = r.flow, firstReasoning = r.firs
     const w = ms - from;
     if (!(n > 0 && ttft > 0 && from > 0 && w >= 100 && n * 1000 <= 10000 * w)) return null;
     if (flow > 0 && flow * 4 < w) return null;
+    if (w < 1000 && from > 4 * w) return null;
     if (think > 0 && firstText > 0 && n * (firstText - ttft) > 20 * think * w) return null;
     return { n, w };
   }
@@ -193,7 +91,7 @@ function firstNote(r, tr) {
     const v = speedOf(r, tr.ms, tr.ttft, tr.firstText, tr.flow, tr.firstReasoning || 0, tr.reasoningHidden || false);
     if (v) s += " · " + t("{n} tok/s", { n: Math.round(v) });
     const { prompt, read } = promptOf(r);
-    if (prompt) s += " · " + t("request cache hit rate {p}", { p: pct(100 * read / prompt) });
+    if (prompt) s += " · " + t("request cache hit rate {p}", { p: hitPct(read / prompt) });
     return s;
   }
 
@@ -201,26 +99,29 @@ const tokens = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e
 
 const pct = (n) => Math.round(n) + "%";
 
-const FAIL = { rate: "rate limited", credit: "out of credit", quota: "quota used up", other: "failed", auth: "sign-in required", canceled: "canceled", foreign: "another account's reasoning", floor: "reply too short", verify: "needs verification", refused: "refused (safety filter)", shape: "request not understood", proxy: "proxy not reachable", effort: "reasoning effort not in its plan", overflow: "too long for its model", room: "reply asked past the window left", slow: "slow to start", prompt: "agent's prompt turned away", restricted: "account restricted by the vendor" };
+const FAIL = { rate: "rate limited", credit: "out of credit", quota: "quota used up", other: "failed", auth: "sign-in required", canceled: "canceled", foreign: "another account's reasoning", floor: "reply too short", verify: "needs verification", refused: "refused (safety filter)", shape: "request not understood", sight: "images not taken", proxy: "proxy not reachable", offline: "network down", overloaded: "servers overloaded", effort: "reasoning effort not in its plan", overflow: "too long for its model", room: "reply asked past the window left", slow: "slow to start", prompt: "agent's prompt turned away", restricted: "account restricted by the vendor" };
 
-const failWord = (why) => t(FAIL[why] || "failed");
+const failWord = (why, rest) => t(why === "quota" && rest?.rate ? FAIL.rate : FAIL[why] || "failed");
 
 const tryOk = (tr) => tr.status < 400 && !tr.fail;
 
 const API = { anthropic: "Anthropic", chat: "OpenAI", responses: "OpenAI Responses", gemini: "Gemini" };
 
 const MODES = {
-    "": ["Smart", "Smart: of the accounts with quota to spare, the one whose allowance renews soonest goes first — what it has left would be lost at the reset. The week decides; an account with five hours and no week goes by its five hours. One at 90% or more waits until the others can't answer; one resting after a failure goes last."],
+    "": ["Smart", "Smart: of the accounts with quota to spare, the one whose allowance renews soonest goes first — what it has left would be lost at the reset. The week decides; an account with five hours and no week goes by its five hours, and one whose month its weeks can no longer use up before it renews by its week. One at 90% or more waits until the others can't answer; one resting after a failure goes last."],
     order: ["In order", "In order: the first answers everything until it can't; then the next."],
+    drain: ["Until used up", "Until used up: one answers everything until its quota is used up; then the next, which keeps them even after the one before renews."],
     rotate: ["In turn", "In turn: each conversation's next turn goes to the account after the one that answered its last, and a new conversation starts one further along; the requests within a turn stay put, keeping the prompt cache."],
     usage: ["Least used", "Least used first: the account with the most of its allowance left goes first; a key by the tokens magpie sent it lately."],
-    pace: ["Weekly pace", "Weekly pace: the account with the most of its week left per hour until it renews goes first — the one with the most to lose at its reset; an account with five hours and no week by what its five hours have left per hour. One at 90% or more waits until the others can't answer; a key by the tokens magpie sent it lately."],
+    pace: ["Use before expiry", "Use before expiry: the account with the most left per hour until it is lost goes first — at its reset, or, when credits in it expire sooner, by those that expire first; an account with five hours and no week by what its five hours have left per hour. One at 90% or more waits until the others can't answer; a key by the tokens magpie sent it lately."],
     manual: ["Manual", "Manual: every request goes to the model picked on the group's card, over its own accounts or keys."],
-    // the provider's key routing (#841); both strings as the provider
-    // editor's routing options say them (app.js ROUTINGS), so every
-    // language is already spoken
-    weight: ["By weight", "Requests spread over the keys by the weight set beside each: a key weighing 3 takes three requests for every one a key weighing 1 takes, evenly over a few requests. One that fails is passed over while it rests, and the others share its requests; a conversation stays with its key as Stays says."],
+    // a provider's keys or a subscription's accounts by weight (#841,
+    // rubbzha on X); both strings as the provider editor's routing options
+    // say them (app.js ROUTINGS), so every language is already spoken
+    weight: ["By weight", "Requests spread over the keys or accounts by the weight set beside each: one weighing 3 takes three requests for every one weighing 1 takes, evenly over a few requests. One that fails is passed over while it rests, and the others share its requests; a conversation stays with it as Stays says."],
     free: ["Free first", "Requests go to what costs nothing first: the models their vendor serves at no cost to this subscription's allowance or credits, in their listed order, and only when those can't answer to one that spends them. Nothing that cost nothing is left unused."],
+    cheap: ["Cheapest first", "Requests go to the member whose model costs least now, by its price a million tokens in and out at this hour — a vendor's peak hours count double where it bills them so, as DeepSeek and Ollama Cloud do — and the cheaper cache read when two cost the same; those that cost the same keep their listed order, and one with no known price goes last."],
+    expiring: ["Free quota by expiry", "Free quota by expiry: the accounts on a free plan, or whose model costs nothing there, go first, the one whose free quota is lost soonest first — at its next reset, or when its credits expire if sooner; once it is used up, the next. A paid one takes requests only when no free one has quota left, the paid as Smart orders them."],
     fast: ["Speed first", "Requests go to the one that has answered this model fastest lately, by its time to the first token and how fast it writes; those within a tenth of each other keep their listed order. One not measured lately gets one request in five, so it is measured again, and one that fails is passed over while it rests."],
   };
 
@@ -236,13 +137,14 @@ const LONE = "Only one account or key is on for this, so routing has nothing to 
 
 const who = (w) => w.kind === "provider" ? w.name : whoShown(w);
 
-const group = (w) => w.used >= 98 ? "spent" : w.used >= 90 ? "low" : "fine";
+const group = (w) => w.used >= 98 ? "spent" : w.used >= 90 && !w.weekLow ? "low" : "fine";
 
 const renews = (w) => (w.renews || []).map((s) => known0(s) ? at(s) : 0);
 
 const renewsBy = (w) => {
+    if (w.soon) return w.soon.slice(w.unreached || 0).map((s) => known0(s) ? at(s) : 0);
     const rs = known0(w.restarts) ? at(w.restarts) : 0;
-    return renews(w).map((x) => rs && (!x || rs < x) ? rs : x);
+    return renews(w).slice(w.unreached || 0).map((x) => rs && (!x || rs < x) ? rs : x);
   };
 
 function cmpRenews(a, b) {
@@ -253,6 +155,8 @@ function cmpRenews(a, b) {
       if (!x || !y) return { c: x ? -1 : 1, k };
       return { c: x < y ? -1 : 1, k };
     }
+    const x = Math.floor(lapseOf(a) / H), y = Math.floor(lapseOf(b) / H);
+    if (x !== y) return { c: !x || !y ? (x ? -1 : 1) : x < y ? -1 : 1, k: -1, lapse: true };
     return { c: 0, k: -1 };
   }
 
@@ -281,9 +185,11 @@ function restHow(rest, from) {
       case "restricted": return t("The vendor restricted the account: it rests {d}, as only the vendor lifting the restriction brings it back. Appeal with the vendor; once it's lifted, try it again here", { d });
       case "backoff": return rest.why === "rate"
         ? t("It was rate limited again as soon as it was back ({n} times in a row): it rests {d}, longer each time until it answers", { n: rest.failures, d })
-        : rest.failures > 1
-        ? t("It has failed {n} times in a row: it rests {d}, longer each time", { n: rest.failures, d })
-        : t("It rests {d}, longer if it fails again", { d });
+        : (rest.failures > 1
+          ? t("It has failed {n} times in a row: it rests {d}, longer each time", { n: rest.failures, d })
+          : t("It rests {d}, longer if it fails again", { d }))
+          // asked in the background meanwhile, and back once it answers
+          + (rest.probed ? " · " + t("checked in the background, back as soon as it answers") : "");
       case "cooldown": return rest.why === "rate"
         ? t("It cools down {d}: the vendor didn't say for how long", { d })
         : t("It rests {d}", { d });
@@ -309,7 +215,7 @@ function weighedWith(r, x) {
 
 function firstWhy(r) {
     const f = r.order[0];
-    if (!f) return t("Nothing could take {model}.", { model: r.model });
+    if (!f) return noneWhy(r);
     const w = who(f);
     if (r.sealedTask && r.leadAccount === f.id) return t("{who} goes first: it answered the parent agent and may be needed to read this encrypted task.", { who: w });
     if (r.compaction && r.order.length === 1) return t("{who} compacted this conversation natively, and only it can read that compaction, so the conversation stays on it: other accounts aren't asked. Start a new conversation to use them.", { who: w });
@@ -319,6 +225,7 @@ function firstWhy(r) {
         : t("{name} has one key on — nothing to choose between.", { name: f.name });
     }
     if (f.rest) return t("Every one is resting after a failure, so {who}, first in line, is tried all the same.", { who: w });
+    if (f.creditsLast) return t("Every one here has used up its allowance and goes on on its credits, set to spend them only after everything else, so {who}, first in line, goes first.", { who: w });
     if (f.fallback) {
       const name = r.order.find((x) => !x.fallback)?.name || r.provider;
       return t("{name} is resting, so its fallback {fb} goes first.", { name, fb: `${f.provider}/${f.model}` });
@@ -342,12 +249,36 @@ function firstWhy(r) {
       case "order": return rested.length
         ? t("In order: with {rested} resting after a failure, {who} is the first that can answer.", { rested: rested.join(", "), who: w })
         : t("In order: {who} is first, and answers everything while it can.", { who: w });
+      case "drain": return t("Until used up: {who} is the one in use, and answers everything until it is used up.", { who: w });
       case "rotate": return t("In turn: it's {who}'s turn — each request starts one further along.", { who: w });
-      case "weight": return t("By weight: it's {who}'s share — each key takes requests as its weight says.", { who: w });
+      case "weight": return t(f.kind === "account" ? "By weight: it's {who}'s share — each account takes requests as its weight says." : "By weight: it's {who}'s share — each key takes requests as its weight says.", { who: w });
       case "free":
         if (f.free) return restedTo(t("it costs nothing there, so it's spent first."))
           || t("Free first: {model} costs nothing on {who}, so it's tried before any that spends the allowance.", { model: f.model, who: w });
         return t("Free first: every one that costs nothing is spent or resting, so {model} on {who}, which spends the allowance, is next.", { model: f.model, who: w });
+      case "expiring": {
+        // Free quota by expiry (routes.FreeExpiring): when a free one's
+        // quota is first lost, as the gateway read it (Weighed.expires)
+        const left = f.expires && at(f.expires) - at(r.time);
+        if (f.free && left > 0) return restedTo(t("its free quota is lost soonest, in {d}.", { d: dur(left) }))
+          || t("Free quota by expiry: {who}'s free quota is lost soonest, in {d}, so it's spent first.", { who: w, d: dur(left) });
+        if (f.free) return restedTo(t("it has free quota left, so it's spent before any paid one."))
+          || t("Free quota by expiry: {who} has free quota left, so it's spent before any paid one.", { who: w });
+        return t("Free quota by expiry: no free one has quota left, so {who}, which is paid for, is next.", { who: w });
+      }
+      case "cheap": {
+        // Cheapest first (routes.Cheapest): its price now, as the gateway
+        // read it for this request (Weighed.price)
+        const p = f.price;
+        if (p) {
+          const price = t("{in} in, {out} out a million tokens", { in: fmtCost({ cost: p.input }), out: fmtCost({ cost: p.output }) });
+          if (p.peak) return restedTo(t("it costs least now, even at its peak price — {price}.", { price }))
+            || t("Cheapest first: {model} costs least on {who} now, even at its peak price — {price}.", { model: f.model, who: w, price });
+          return restedTo(t("it costs least now — {price}.", { price }))
+            || t("Cheapest first: {model} costs least on {who} now — {price}.", { model: f.model, who: w, price });
+        }
+        return t("Cheapest first: no price is known for {model} on {who}, so it goes in its listed place after every one that has a price.", { model: f.model, who: w });
+      }
       case "fast": {
         // Speed first (routes.Fastest): its time to the first token and
         // pace lately, as the gateway measured them (Weighed.lateTtft)
@@ -363,21 +294,29 @@ function firstWhy(r) {
         return t("Speed first: none has answered {model} lately, so {who}, first in the list, goes first and its answer measures it.", { who: w, model: f.model });
       }
       case "usage":
+        if (f.balance != null) return walletWhy(r, f) || t("{who} goes first.", { who: w });
         if (f.known) return t("Least used first: {who} has the most of its allowance left — {n} used.", { who: w, n: pct(f.used) });
         if (f.kind === "key" && !someKnown) return t("Least used first: {who} served the fewest tokens lately — {n}.", { who: w, n: tokens(f.tokens || 0) });
         return t("Least used first: {who} goes first.", { who: w });
       case "pace":
+        if (f.balance != null) return walletWhy(r, f) || t("{who} goes first.", { who: w });
         if (f.known) {
           // The allowance window used for pace, which may be shorter than a week.
           const left = known0(f.due) ? Math.min(100, Math.round((f.pace || 0) * Math.max(1, (at(f.due) - at(r.time)) / 36e5))) : null;
-          if (left !== null && f.dueBy === "reset") return t("Weekly pace: {who} has the most remaining allowance per hour until one of its Codex resets about to run out is used by itself — {n} left, used in {d}.", { who: w, n: pct(left), d: dur(at(f.due) - at(r.time)) });
+          if (left !== null && f.dueBy === "expiry") return t("Use before expiry: {who} has the most credits expiring per hour until they expire — {n} of its allowance expires in {d}.", { who: w, n: pct(left), d: dur(at(f.due) - at(r.time)) });
+          if (left !== null && f.dueBy === "reset") return t("Use before expiry: {who} has the most remaining allowance per hour until one of its Codex resets about to run out is used by itself — {n} left, used in {d}.", { who: w, n: pct(left), d: dur(at(f.due) - at(r.time)) });
           return left !== null
-            ? t("Weekly pace: {who} has the most remaining allowance per hour until reset — {n} left, resets in {d}.", { who: w, n: pct(left), d: dur(at(f.due) - at(r.time)) })
-            : t("Weekly pace: {who} has the most remaining allowance per hour until reset — {n} used.", { who: w, n: pct(f.used) });
+            ? t("Use before expiry: {who} has the most remaining allowance per hour until reset — {n} left, resets in {d}.", { who: w, n: pct(left), d: dur(at(f.due) - at(r.time)) })
+            : t("Use before expiry: {who} has the most remaining allowance per hour until reset — {n} used.", { who: w, n: pct(f.used) });
         }
-        if (f.kind === "key" && !someKnown) return t("Weekly pace: {who} served the fewest tokens lately — {n}.", { who: w, n: tokens(f.tokens || 0) });
-        return t("Weekly pace: {who} goes first.", { who: w });
+        if (f.kind === "key" && !someKnown) return t("Use before expiry: {who} served the fewest tokens lately — {n}.", { who: w, n: tokens(f.tokens || 0) });
+        return t("Use before expiry: {who} goes first.", { who: w });
     }
+    // its provider set to be used first (Provider.UseFirst, routes.Seat.Lead):
+    // Smart puts it ahead of the others it weighs it with, whatever they
+    // have left (hzh_1119 on Discord)
+    if (f.useFirst && peers.some((p) => !p.useFirst)) return restedTo(t("its provider is set to be used first."))
+      || t("{who} goes first: its provider is set to be used first.", { who: w });
     // keys that read their own windows (a sub2api key's limits) are
     // weighed by them, as accounts are, and one not read yet beside them
     // too: told below as one
@@ -395,12 +334,21 @@ function firstWhy(r) {
     const next = peers.find((p) => p.known && group(p) === "fine");
     const soon = renewsBy(f).find(Boolean);
     if (!next) return t("{who} goes first: it has quota to spare, and the others are kept for last.", { who: w });
-    const { c, k } = cmpRenews(f, next);
+    const { c, k, lapse } = cmpRenews(f, next);
     if (c < 0 && k === 0 && known0(f.restarts)) return t("{who} goes first: of those with quota to spare, its allowance starts again soonest — one of its Codex resets about to run out is used by itself in {d}, and what it has left then is lost. {other} renews later and keeps its own.", { who: w, d: dur(at(f.restarts) - at(r.time)), other: who(next) });
-    if (c < 0 && k === 0) return t("{who} goes first: of those with quota to spare, its allowance renews soonest — in {d} — and what it has left then is lost. {other} renews later and keeps its own.", { who: w, d: dur(renews(f)[0] - at(r.time)), other: who(next) });
-    if (c < 0) return t("{who} goes first: its allowance renews in the same hour as {other}'s, and its shorter one sooner — in {d}.", { who: w, other: who(next), d: dur(renewsBy(f)[k] - at(r.time)) });
-    if (soon) return t("{who} and {other} renew within the same hour, so the order given stays — and the vendor's prompt cache stays warm.", { who: w, other: who(next) });
-    return t("{who} goes first, in the order given: when its allowance renews isn't known.", { who: w });
+    // its credits run out before its window renews, and before the next
+    // one's does: Smart ranked it by that end (#5646)
+    if (c < 0 && k >= 0 && expiresAt(f, k)) return t("{who} goes first: its credits expire in {d}, before {other} renews, and what is left of them then is lost — so they're used first.", { who: w, d: dur(renewsBy(f)[k] - at(r.time)), other: who(next) });
+    if (c < 0 && k === 0 && f.unreached) return t("{who} goes first: its longer window has more left than its shorter one can still let through before it renews, so the shorter one decides — it renews soonest, in {d}, and what it has left then is lost. {other} renews later and keeps its own.", { who: w, d: dur(renewsBy(f)[0] - at(r.time)), other: who(next) });
+    if (c < 0 && k === 0) return t("{who} goes first: of those with quota to spare, its allowance renews soonest — in {d} — and what it has left then is lost. {other} renews later and keeps its own.", { who: w, d: dur(renewsBy(f)[0] - at(r.time)), other: who(next) });
+    if (c < 0 && k > 0) return t("{who} goes first: its allowance renews in the same hour as {other}'s, and its shorter one sooner — in {d}.", { who: w, other: who(next), d: dur(renewsBy(f)[k] - at(r.time)) });
+    // renewing in the same hour, its credits lapse first (Seat.Lapse)
+    if (c < 0 && lapse) return t("{who} goes first: it renews within the same hour as {other}, but its credits expire sooner — in {d} — so they're used first.", { who: w, other: who(next), d: dur(lapseOf(f) - at(r.time)) });
+    if (c === 0 && walletWhy(r, f)) return walletWhy(r, f);
+    // the order given stands only where every key Smart sorts by ties
+    if (c === 0 && soon) return t("{who} and {other} renew within the same hour, so the order given stays — and the vendor's prompt cache stays warm.", { who: w, other: who(next) });
+    if (c === 0) return t("{who} goes first, in the order given: when its allowance renews isn't known.", { who: w });
+    return t("{who} goes first.", { who: w });
   }
 
 function memberSplit(r, f, x) {
@@ -457,6 +405,11 @@ function asides(r) {
       // behind the first by a group's weights or its order, which take
       // each member whole: not by what x has left (Creat.wu: a group in
       // a group by weight, its accounts at 91%, read as passed over)
+      if (x.creditsLast && f0 && !f0.creditsLast) {
+        // behind everything not on its credits, as the user set it
+        out.push(t("{who} has used up its allowance and goes on on its credits, which it is set to spend only after everything else: it is tried after every other account, key and fallback.", { who: who(x) }));
+        continue;
+      }
       const by = !x.rest && !x.sunk && f0 ? memberSplit(r, f0, x) : null;
       if (by && smart(x) && (x.known ? group(x) === "low" : someKnown(x))) {
         if (!told.has(by.member)) {
@@ -468,7 +421,7 @@ function asides(r) {
         continue;
       }
       if (x.sunk && !x.rest) out.push(t("{who} was rate limited at {time} while it had quota left, so it went to the back: it comes round again once those ahead of it are rate limited in turn.", { who: who(x), time: clock(x.sunk) }));
-      else if (x.rest) out.push(t("{who} is resting — {why}, {when} — so it waits at the back.", { who: who(x), why: `${x.rest.status} · ${failWord(x.rest.why)}`, when: restWhen(x.rest, at(r.time)) }));
+      else if (x.rest) out.push(t("{who} is resting — {why}, {when} — so it waits at the back.", { who: who(x), why: `${x.rest.status} · ${failWord(x.rest.why, x.rest)}`, when: restWhen(x.rest, at(r.time)) }));
       else if (smart(x) && x.known && group(x) === "spent" && x.credits) out.push(t("{who} is at {n} of its allowance but goes on on its credits — ahead of those used up with nothing to go on with, after those with allowance left.", { who: who(x), n: pct(x.used) }));
       else if (smart(x) && x.known && group(x) === "spent" && weighedWith(r, x).length > 1) out.push(t("{who} is at {n} — all but used up, it answers only when nothing else can.", { who: who(x), n: pct(x.used) }));
       else if (smart(x) && x.known && group(x) === "low" && weighedWith(r, x).length > 1) out.push(t("{who} is at {n} — kept for when the others can't.", { who: who(x), n: pct(x.used) }));
@@ -476,20 +429,11 @@ function asides(r) {
       else if (smart(x) && !x.known && someKnown(x)) out.push(t("{who}: what it has left isn't known yet, so it goes after those known.", { who: who(x) }));
     }
     const pooled = r.order.find((x) => !x.aside && x.kind === "key");
-    for (const x of r.order.filter((x) => x.aside)) out.push(t("{who} is made for {api}, not {other} as the keys routed over are, so it isn't one of them: it's tried after them.", { who: who(x), api: API[x.speaks] || x.speaks || t("any API"), other: API[pooled?.speaks] || pooled?.speaks || t("any API") }));
-    for (const x of r.left || []) out.push(x.held
-      ? t("{who} is left out: the gateway key asking may not use its account.", { who: who(x) })
-      : x.window
-      ? t("{who} is left out: this request is longer than its {n} context window, so it would only refuse it. It's asked only once every one with room is out of its allowance.", { who: who(x), n: ctxShort(x.window) })
-      : x.noCredits
-      ? t("{who} is left out: a usage window is used up, and the account is set not to spend its credits, so it counts as used up until that window renews.", { who: who(x) })
-      : x.capped
-      ? t("{who} is left out: a usage window is at {n}, past the {cap}% cap set on the account, so it counts as used up until that window renews.", { who: who(x), n: pct(x.used), cap: x.capped })
-      : x.barred
-      ? t("{who} is left out: it is set to serve other models, not {model}.", { who: who(x), model: x.model })
-      : x.kind === "key"
-      ? t("{who} is left out: {name} lists {model} to its other keys, not this one.", { who: who(x), name: x.name, model: x.model })
-      : t("{who} is left out: its plan doesn't list {model}.", { who: who(x), model: x.model }));
+    // held back, the provider's accounts at once taken by those before it
+    // in the list (01huadalang on Discord, ZCode)
+    for (const x of r.order.filter((x) => x.reserve)) out.push(t("{who} is in reserve: {n} of its provider's accounts or keys take requests at once, the first in the list, so it's tried only once they have all failed.", { who: who(x), n: x.reserve }));
+    for (const x of r.order.filter((x) => x.aside && !x.reserve)) out.push(t("{who} is made for {api}, not {other} as the keys routed over are, so it isn't one of them: it's tried after them.", { who: who(x), api: API[x.speaks] || x.speaks || t("any API"), other: API[pooled?.speaks] || pooled?.speaks || t("any API") }));
+    for (const x of r.left || []) out.push(leftWhy(x));
     return out;
   }
 
@@ -503,6 +447,8 @@ function affWhy(r, lead) {
       case "session": return t("Kept on {who}: it answered this conversation before, and affinity keeps a session with one account.", { who: last });
       case "turn": return t("Kept on {who}: {agent} is handing back tool results within turn {n}, and moving now would lose what the vendor cached of it.", { who: last, agent: agentName(r.agent), n: a.turn });
       case "cache": return t("Kept on {who}: {d} ago the vendor read {r} tokens of this conversation from its cache and wrote {w} to it; anyone else would be sent them afresh and paid in full.", { who: last, r: tokens(a.cacheRead || 0), w: tokens(a.cacheWrite || 0), d: ago });
+      case "lead": return t("Put on {first}, where this session's {model} is: one session goes on one account.", { first: who(r.order[0]), model: a.leadModel || "" });
+      case "strict": return a.main ? t("{who}, a fallback, answered this conversation last. The provider's own {first} is ready again, but Stays is Strict, which never moves a conversation, so it stays on the fallback; new conversations go to {first}.", { who: last, first: who(a.main) }) : null;
       case "new-turn": return routing === "rotate"
         ? t("Turn {n} begins: in turn, it goes to the one after {who}, which answered the last turn — {next}.", { n: a.turn, who: last, next: who(r.order[0]) })
         : lead ? null : t("Turn {n} begins: affinity keeps a conversation only within a turn, so routing decides afresh.", { n: a.turn });
@@ -511,7 +457,14 @@ function affWhy(r, lead) {
     switch (a.why) {
       case "resting": return t("{who} answered this conversation last, but it is resting, so the conversation moves.", { who: last });
       case "spent": return t("{who} answered this conversation last, but its allowance is all but used up, so the conversation moves.", { who: last });
+      case "reserve": return t("{who} answered this conversation last, but it is in reserve while those before it in the list can take requests, so the conversation moves back to them.", { who: last });
+      case "credits": return t("{who} answered this conversation last, but it is on its credits now, set to spend them only after everything else, so the conversation moves to {first}.", { who: last, first: who(r.order[0]) });
       case "gone": return t("{who} answered this conversation last, but it is no longer one to route to.", { who: last });
+      case "order": return r.group
+        ? t("{who} answered this conversation last, but the group goes in order and {first}, ahead of it, is ready again, so turn {n} goes back to {first}.", { who: last, first: who(r.order[0]), n: a.turn })
+        : t("{who} answered this conversation last, but the provider goes in order and {first}, ahead of it, is ready again, so turn {n} goes back to {first}.", { who: last, first: who(r.order[0]), n: a.turn });
+      case "main": return t("{who}, a fallback, answered this conversation last, but the provider's own {first} is ready again, so turn {n} goes back to it.", { who: last, first: who(r.order[0]), n: a.turn });
+      case "back": return t("{who} took this conversation while {first}, listed ahead of it in the group, couldn't; {first} is ready again, so turn {n} goes back to it.", { who: last, first: who(r.order[0]), n: a.turn });
       case "no-cache": return t("{who} answered this conversation last, but the vendor then read only {r} tokens of it from its cache and wrote {w} — not worth staying for.", { who: last, r: tokens(a.cacheRead || 0), w: tokens(a.cacheWrite || 0) });
       case "cold": return t("{who} answered this conversation {d} ago, longer than the 5 minutes a vendor keeps a prompt cached — so routing decides afresh.", { who: last, d: ago });
       case "off": return t("Affinity is off: each request is routed afresh, whoever answered its conversation before.");
@@ -601,11 +554,15 @@ function classWhy(x) {
     if (!c) return x?.pick ? t("Turn {turn} reasons at {level}, as the classifier picked when it began.", { turn: x.turn, level: x.pick }) : null;
     const r = { rule: x };
     const by = c.by || t("the classifier"), kinds = (c.intents || []).map((x) => `“${x}”`).join(", ");
+    // a group above picked the turn's reasoning, so this one's classifier
+    // wasn't asked for it (#4358): the turn reasons at that pick
+    const above = c.above ? t("{by} wasn't asked how hard turn {turn} is: the group above picked {level} reasoning for it.", { by, turn: r.rule.turn, level: c.above }) : "";
+    if (above && !c.intents?.length) return above;
     // it couldn't say, and the turn keeps the intent the turn before had
     // (#1826), rather than going with none
     if (c.error && c.fallback === "previous" && c.intent) return t("{by} was to tell which of {kinds} turn {turn} is, but couldn't — {err} — so the turn keeps “{intent}”, as turn {prev} was.", { by, kinds, turn: r.rule.turn, err: c.error, intent: c.intent, prev: r.rule.turn - 1 });
     if (c.error) return c.intents?.length
-      ? t("{by} was to tell which of {kinds} turn {turn} is, but couldn't — {err} — so no rule with an intent matches it.", { by, kinds, turn: r.rule.turn, err: c.error })
+      ? t("{by} was to tell which of {kinds} turn {turn} is, but couldn't — {err} — so no rule with an intent matches it.", { by, kinds, turn: r.rule.turn, err: c.error }) + (above ? " " + above : "")
       : t("{by} was to rate how hard turn {turn} is, but couldn't — {err} — so it reasons as the agent asked.", { by, turn: r.rule.turn, err: c.error });
     const when = c.cached ? t("said before, for the same message") : t("in {ms}", { ms: took(c.ms) });
     const told = c.after ? " " + t("It was told turn {prev} was “{after}”, which a message that only carries on from it is too.", { prev: r.rule.turn - 1, after: c.after }) : "";
@@ -613,15 +570,31 @@ function classWhy(x) {
     const effort = c.effort ? t("{by} rated turn {turn} {score} of 3, so it picks {level} reasoning for the turn — each model gets the level it has nearest.", { by, turn: r.rule.turn, score: (c.score || 0).toFixed(1), level: c.effort }) + toldEffort : "";
     if (!c.intents?.length) return effort ? `${effort} (${when})` : null;
     const sure = c.sure ? t(", {n} sure", { n: Math.round(c.sure * 100) + "%" }) : "";
+    // c.said is the answer as it was said (#4598): a chat model's 0 is
+    // none, but a decision model can name a choice no intent came of (a
+    // kind under the sure-enough bar, its own "none of these")
+    const answered = !c.intent && c.said && c.said !== "0" ? c.said : "";
     const said = (!c.intent
-      ? t("{by} was asked which of {kinds} turn {turn} is, and said none ({took}).", { by, kinds, turn: r.rule.turn, took: when + sure })
+      ? answered
+        ? t("{by} was asked which of {kinds} turn {turn} is, and answered “{said}”, which is no rule's intent ({took}).", { by, kinds, turn: r.rule.turn, said: answered, took: when + sure })
+        : t("{by} was asked which of {kinds} turn {turn} is, and said none ({took}).", { by, kinds, turn: r.rule.turn, took: when + sure })
       : t("{by} was asked which of {kinds} turn {turn} is, and said “{intent}” ({took}).", { by, kinds, turn: r.rule.turn, intent: c.intent, took: when + sure })) + told;
-    return effort ? `${said} ${effort}` : said;
+    return effort ? `${said} ${effort}` : above ? `${said} ${above}` : said;
   }
 
 function condText(c) {
     let m;
-    if ((m = /^intent "(.*)"$/.exec(c))) return t("asks for “{intent}”", { intent: m[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\") });
+    if ((m = intentOf(c)) != null) return t("asks for “{intent}”", { intent: m });
+    // a condition in the rule's where, as provider.Cond's Text writes it
+    if ((m = /^tokens ([><≤]) (\d+)$/.exec(c))) return whereText({ field: "tokens", op: { ">": "gt", "<": "lt", "≤": "lte" }[m[1]], value: m[2] });
+    if ((m = /^effort (is not|is|≤) (\w+)$/.exec(c))) return whereText({ field: "effort", op: { "is not": "not", is: "is", "≤": "lte" }[m[1]], value: m[2] });
+    if ((m = /^agent (is not|is) (.+)$/.exec(c))) return whereText({ field: "agent", op: m[1] === "is" ? "is" : "not", value: m[2].split("|").join(",") });
+    if (c === "subagent" || c === "not subagent") return whereText({ field: "subagent", op: c === "subagent" ? "is" : "not" });
+    if ((m = /^(message|system|last) (contains|doesn't contain|starts with|matches) (".*")$/.exec(c))) {
+      let v = m[3];
+      try { v = JSON.parse(v); } catch { v = v.slice(1, -1); }
+      return whereText({ field: m[1], op: { contains: "contains", "doesn't contain": "excludes", "starts with": "starts", matches: "matches" }[m[2]], value: v });
+    }
     if ((m = /^tokens ≥ (\d+)$/.exec(c))) return t("≥ {n} tokens", { n: Number(m[1]).toLocaleString(intlLang()) });
     if (c === "images") return t("has an image");
     if (c === "reasoning") return t("reasoning on");
@@ -743,7 +716,7 @@ function trySaid(r, i) {
     if (tr.status < 400 && tr.fail)
       return tr.rest
         ? t("{who} began answering, then broke off · {fail}. {agent} got what was said before the error; {how}, so {agent}'s next request goes to another first.",
-          { who: name, fail: failWord(tr.fail), how: restHow(tr.rest, at(tr.start) + (tr.ms || 0)), agent })
+          { who: name, fail: failWord(tr.fail, tr.rest), how: restHow(tr.rest, at(tr.start) + (tr.ms || 0)), agent })
         : t("{who} began answering, then broke off. {agent} got what was said before the error; the conversation isn't kept on {who} for its next request.", { who: name, agent });
     if (tr.status < 400) {
       const tk = (r.tokens ? " · " + t("{n} tokens", { n: tokens(r.tokens) }) : "") + firstNote(r, tr);
@@ -781,6 +754,8 @@ function trySaid(r, i) {
       return r.tries[i + 1]
         ? t("{who} answered {status}: the vendor turns away {agent}'s system prompt whichever account it goes to, so it goes on to the next before any of the reply reaches {agent}. Nothing is wrong with {who}, so it doesn't rest.", { who: name, status: tr.status, agent })
         : t("{who} answered {status}: the vendor turns away {agent}'s system prompt whichever account it goes to, and nobody else is left to try, so {agent} gets the error. Nothing is wrong with {who}, so it doesn't rest.", { who: name, status: tr.status, agent });
+    if (tr.fail === "sight")
+      return t("{who} answered {status}: it takes no images, so it is asked again with the images described by the image recognition model, before any of the reply reaches {agent}. Later requests to it are described first. Nothing is wrong with {who}, so it doesn't rest.", { who: name, status: tr.status, agent });
     if (tr.fail === "shape")
       return t("{who} answered {status}: its API couldn't read something in the request that another's may, so it goes on to the next before any of the reply reaches {agent}. Nothing is wrong with {who}, so it doesn't rest.", { who: name, status: tr.status, agent });
     if (tr.fail === "effort")
@@ -795,6 +770,11 @@ function trySaid(r, i) {
         ? t("{who} hadn't begun answering after {ms}, {n} times in a row, so the request went on to the next before any of it reached {agent}. It rests {d} for {model} alone, longer each time it is slow again; its other models answer as before.",
           { who: name, ms: took(tr.ms), n: tr.rest.failures, model: tr.rest.model || tr.model, d: dur(at(tr.rest.until) - at(tr.start) - (tr.ms || 0)), agent })
         : t("{who} hadn't begun answering after {ms}, so the request went on to the next before any of it reached {agent}. Nothing is wrong with {who}, so it doesn't rest.", { who: name, ms: took(tr.ms), agent });
+    // this computer had no network (usrname1833 on Discord)
+    if (tr.fail === "offline")
+      return r.tries[i + 1]
+        ? t("{who}: this computer had no network, so the request never reached the vendor and goes on to the next. Nothing is wrong with {who}, so it doesn't rest: once the network is back it is asked first again.", { who: name })
+        : t("{who}: this computer had no network, so the request never reached the vendor, and nobody is left to try: {agent} gets the error. Nothing is wrong with {who}, so it doesn't rest.", { who: name, agent });
     if (tr.fail === "proxy")
       return r.tries[i + 1]
         ? t("{who}: the proxy magpie goes through didn't take the connection, so the request never reached the vendor and goes on to the next. Nothing is wrong with {who}, so it doesn't rest: once the proxy is up it is asked first again.", { who: name })
@@ -803,13 +783,17 @@ function trySaid(r, i) {
     // story ends there, not on a retry that never came
     if (tr.gone)
       return t("{who} answered {status} · {fail}, and was to be asked again in {d}, but {agent} canceled the request before then, so nobody is asked again.",
-        { who: name, status: tr.status, fail: failWord(tr.fail), d: took(tr.again), agent });
+        { who: name, status: tr.status, fail: failWord(tr.fail, tr.rest), d: took(tr.again), agent });
     if (tr.replan)
       return t("{who} answered {status} · {fail}, and every member had failed with an error that may pass, so after {d} the {n} of them are asked again, in turn, before any of the reply reaches {agent}. The group waits up to {p} for one to answer.",
-        { who: name, status: tr.status, fail: failWord(tr.fail), d: took(tr.again), n: tr.replan, p: took((tr.patience || 0) * 1000), agent });
+        { who: name, status: tr.status, fail: failWord(tr.fail, tr.rest), d: took(tr.again), n: tr.replan, p: took((tr.patience || 0) * 1000), agent });
+    // kept on it for its cache, so asked once more before it moves (jiabubu)
+    if (tr.again && tr.kept)
+      return t("{who} answered {status} · {fail}, a failure that may pass. The conversation is kept on {who} for what its vendor cached of it, so it is asked once more in {d} before the request moves to another.",
+        { who: name, status: tr.status, fail: failWord(tr.fail, tr.rest), d: took(tr.again) });
     if (tr.again)
       return t("{who} answered {status} · {fail}, and nobody else is left to ask — a failure that may pass, so it is tried again in {d}, before any of the reply reaches {agent}.",
-        { who: name, status: tr.status, fail: failWord(tr.fail), d: took(tr.again), agent });
+        { who: name, status: tr.status, fail: failWord(tr.fail, tr.rest), d: took(tr.again), agent });
     // the last one left out of its allowance, after another failed
     // otherwise: the agent was told that one's error (Try.Earlier)
     if (tr.earlier && !next)
@@ -820,12 +804,12 @@ function trySaid(r, i) {
     if (next)
       return tr.rest
         ? t("{who} answered {status} · {fail}. {how}; the request goes on to {next} before any of the reply reaches {agent}.",
-          { who: name, status: tr.status, fail: failWord(tr.fail), how, next: nw ? who(nw) : t("the next"), agent })
+          { who: name, status: tr.status, fail: failWord(tr.fail, tr.rest), how, next: nw ? who(nw) : t("the next"), agent })
         : t("{who} answered {status}, and the request goes on to {next} before any of the reply reaches {agent}. {who} doesn't rest for it.",
           { who: name, status: tr.status, next: nw ? who(nw) : t("the next"), agent });
     if (tr.rest)
       return t("{who} answered {status} · {fail}. {how}; nobody is left to try, so {agent} gets the error.",
-        { who: name, status: tr.status, fail: failWord(tr.fail), how, agent });
+        { who: name, status: tr.status, fail: failWord(tr.fail, tr.rest), how, agent });
     // the gateway stopped here with accounts left in the order: one it
     // would not go on from (the same history refused on every account of
     // a vendor, with no other vendor left)
@@ -850,8 +834,8 @@ function swapWhy(tr, o = {}) {
     if (tr.upstream) return s + " " + t("Its reply says {upstream} answered.", { upstream: tr.upstream });
     if (o.pinUnknown) return s + " " + t("Its reply didn't say which provider answered.");
     if (tr.pin) return s + " " + t("{pin} was asked for, but its reply didn't say which provider answered, so whether ClinePass kept to it is unknown.", { pin: tr.pin });
-    const tick = /(^|\/)cline-pass\/(deepseek|glm)/i.test(tr.model) ? " " + t("To ask for the maker's own API, tick “{tick}” in the provider's settings.", { tick: t("DeepSeek and GLM models only from their makers' own APIs") }) : "";
-    return s + " " + t("No provider was asked for, and its reply didn't say which one answered.") + tick;
+    // no tick to point to: since 11-06 Cline refuses the pin it wrote (#5442)
+    return s + " " + t("No provider was asked for, and its reply didn't say which one answered.");
   }
 
 const routedWhy = (tr) => t("{sent} is a routing group of the remote magpie, and it routed the request to {served}: the group picking one of its models, not the vendor swapping the model.", { sent: tr.model, served: tr.served });
@@ -860,9 +844,14 @@ const upstreamWhy = (tr) => t("The aggregator passed the request on to {upstream
 
 function subagentWhy(r) {
     const agent = agentName(r.agent);
+    const said = { agent, model: r.subagent.asked, to: r.subagent.to, why: r.subagent.kept ? t(r.subagent.kept) : "" };
+    // set to follow the lead (cleverpigo on X): To is the lead's model
+    if (r.subagent.lead) return r.subagent.kept
+      ? t("{agent} requested a subagent on {model} and it stayed there: its subagents follow their lead, on {to}, but {why}.", said)
+      : t("{agent} requested a subagent on {model}; magpie put it on {to}, the model its lead is on.", said);
     return r.subagent.kept
-      ? t("{agent} requested a subagent on {model} and it stayed there: its subagents are set to {to}, but {why}.", { agent, model: r.subagent.asked, to: r.subagent.to, why: t(r.subagent.kept) })
-      : t("{agent} requested a subagent on {model}; magpie put it on {to}, the model set for its subagents.", { agent, model: r.subagent.asked, to: r.subagent.to });
+      ? t("{agent} requested a subagent on {model} and it stayed there: its subagents are set to {to}, but {why}.", said)
+      : t("{agent} requested a subagent on {model}; magpie put it on {to}, the model set for its subagents.", said);
   }
 
 function kindWhy(r) {
@@ -873,6 +862,10 @@ function kindWhy(r) {
       : t("{agent} requested a subagent on {model}.", { agent, model: r.model });
     if (purposeOf(r.kind) === "kind:ambient_suggestions") return t("{agent} drafted the suggested prompts on its home page by itself, in the background, searching the project's files and connected apps, and checked them for safety. Not a turn of the conversation; Codex's Settings › Configuration › Suggested prompts turns it off.", { agent });
     if (purposeOf(r.kind) === "kind:composer_predictions") return t("{agent} guessed your next message for its composer by itself, reading the whole conversation again. Not a turn of the conversation; Codex composer predictions, under Settings in Codex's row on the Agents page, picks its model, and Codex's Settings › General › Show predictions turns it off.", { agent });
+    // Claude Desktop's check that magpie answers names its model itself
+    // (cybercaius on Discord: "Desktop requested deepseek-flash" while
+    // the chat was on another model)
+    if (r.kind === "connection_check") return t("{agent} checked that magpie answers, as it does when it starts and from its Test connection. It names this check's model itself, from the names in its model list ({model}), not the model chosen in the conversation, and only reads whether an answer comes back; magpie sends it to the model chosen in {agent}'s model menu, or to its first listed model when none is. Not a turn of the conversation.", { agent, model: r.model });
     if (r.kind === "luna_reserve") return t("{agent} sent this turn on Luna Reserve, which it turns to once the plan's own allowance is used up; it picks the model itself.", { agent });
     // the searcher asked first failed or found nothing, and this one
     // searched in its place: say which and why, not just who searched
@@ -897,6 +890,19 @@ function kindWhy(r) {
     // went to Codex's GPT, and nothing said why or where to change it)
     // the Image recognition model the user picked is missing: the one
     // magpie picks described in its place, and the row says so
+    // the model asked first couldn't describe the image, and this one
+    // did in its place: say which and why (kelvinjason11 on X: one
+    // describer failing failed every turn with an image)
+    if (r.kind === "vision" && r.for?.instead) {
+      const f = r.for;
+      const whom = f.mcp ? t("{agent}'s call to magpie's analyze_image MCP tool", { agent: agentName(f.agent) })
+        : f.model ? t("{agent}'s {model}", { agent: agentName(f.agent), model: f.model })
+        : t("a model that can't see images");
+      const why = f.why || t("it failed");
+      return f.picked
+        ? t("{failed}, the Image recognition model picked in Settings › Models, couldn't describe an image for {whom}: {why}. So magpie had {describer}, the next model it can use that sees, describe it in its place. Not a turn of the conversation.", { failed: f.instead, whom, why, describer: r.model })
+        : t("{failed}, the model magpie picked to describe images, couldn't describe an image for {whom}: {why}. So magpie had {describer}, the next model it can use that sees, describe it in its place. Not a turn of the conversation.", { failed: f.instead, whom, why, describer: r.model });
+    }
     // the agent called magpie's image recognition MCP server itself
     if (r.kind === "vision" && r.for?.mcp) return t("{agent} called magpie's analyze_image MCP tool: {describer} looked at the image for it. Not a turn of the conversation.", { agent: agentName(r.for.agent), describer: r.model });
     if (r.kind === "vision" && r.for?.missing) return t("{picked}, the Image recognition model picked in Settings, isn't set up any more, so magpie had {describer}, its automatic choice, describe an image for {agent}'s {model} in its place. Pick another in Settings › Models › Image recognition. Not a turn of the conversation.", { picked: r.for.missing, agent: agentName(r.for.agent), model: r.for.model, describer: r.model });
@@ -907,8 +913,13 @@ function kindWhy(r) {
     return t("{agent} made this call itself ({kind}), not as a turn of the conversation, and picks its model itself.", { agent, kind: kindName(r.kind) });
   }
 
-let groups = null, gEdit = null;
- function items(r){
+let groups = null;
+
+let gEdit = null;
+
+const REQUEST_KINDS = {"agent_job":{"purpose":"kind:collab_spawn","name":"Subagent"},"ambient_suggestion_safety":{"purpose":"kind:ambient_suggestions","name":"Suggestions"},"ambient_suggestions":{"purpose":"kind:ambient_suggestions","name":"Suggestions"},"api_detect":{"purpose":"kind:api_detect","name":"Detect APIs"},"auto_review":{"purpose":"kind:guardian","name":"Approval check"},"cache_keepalive":{"purpose":"kind:cache_keepalive","name":"Cache keep-alive"},"collab_spawn":{"purpose":"kind:collab_spawn","name":"Subagent"},"compact":{"purpose":"kind:compact","name":"Compaction"},"composer_predictions":{"purpose":"kind:composer_predictions","name":"Prediction"},"connection_check":{"purpose":"kind:connection_check","name":"Connection check"},"guardian":{"purpose":"kind:guardian","name":"Approval check"},"guardian_review":{"purpose":"kind:guardian","name":"Approval check"},"luna_reserve":{"purpose":"kind:luna_reserve","name":"Luna Reserve"},"mcp":{"purpose":"kind:mcp","name":"MCP tool"},"memgen":{"purpose":"kind:memory_consolidation","name":"Memory"},"memory":{"purpose":"kind:memory_consolidation","name":"Memory"},"memory_consolidation":{"purpose":"kind:memory_consolidation","name":"Memory"},"model_list":{"purpose":"kind:model_list","name":"Model list"},"provider_test":{"purpose":"kind:provider_test","name":"Test"},"review":{"purpose":"kind:review","name":"Review"},"routing":{"purpose":"kind:routing","name":"Routing classifier"},"thread_description":{"purpose":"kind:thread_description","name":"Description"},"thread_spawn":{"purpose":"kind:collab_spawn","name":"Subagent"},"thread_title":{"purpose":"kind:thread_title","name":"Title"},"thread_title_reconsideration":{"purpose":"kind:thread_title","name":"Title"},"title":{"purpose":"kind:thread_title","name":"Title"},"title_generation":{"purpose":"kind:thread_title","name":"Title"},"vision":{"purpose":"kind:vision","name":"Image description"},"web_search":{"purpose":"kind:web_search","name":"Web search"}};
+
+function items(r) {
     const items = [];
     const main = r.order.find((x) => !x.fallback);
     items.push([r.group
@@ -918,20 +929,26 @@ let groups = null, gEdit = null;
       : t("{agent} asked for {model}", { agent: agentName(r.agent), model: r.model }) + " → " + (main?.name || r.provider), ""]);
     if (tagKind(r)) items.push([kindWhy(r), "aside kind"]);
     else if (r.subagent) items.push([subagentWhy(r), "aside"]);
+    if (movedSays(r)) items.push([movedWhy(r), tagKind(r) ? "aside" : "aside stood"]);
     if (r.subagentEffort) items.push([t("The subagent effort set in magpie is {effort}; the model's supported levels and a routing group's fixed member effort still apply.", { effort: t(r.subagentEffort) }), "aside"]);
     if (r.sealedTask) items.push([t(r.group
       ? "This subagent task is encrypted. Only ChatGPT accounts can read it; other providers (such as Claude) are excluded regardless of quota."
       : "This subagent task is encrypted. Only ChatGPT accounts can read it."), "aside"]);
     items.push([affWhy(r, true) || ruleWhy(r, true) || firstWhy(r), "why"]);
     for (const s of nestedWhy(r)) items.push([s, "why"]);
-    for (const a of asides(r)) items.push([a, "aside"]);
+    // the member a line is about, where it is one: a skipped one's line, a try's
+    const skipped = new Map((r.left || []).map((x) => [leftWhy(x), x]));
+    for (const a of asides(r)) items.push([a, "aside", undefined, skipped.get(a)]);
     r.tries.forEach((tr, i) => {
-      items.push([tryWhy(r, i), tr.done ? (tryOk(tr) ? "ok" : "bad") : "wait"]);
+      items.push([tryWhy(r, i), tr.done ? (tryOk(tr) ? "ok" : "bad") : "wait", undefined, tried(r, tr)]);
       // where its time went, once it is done: the first try's has the
       // request's masking before it
       const timed = i === 0 && r.masking > 0 ? { ...tr, masking: r.masking } : tr;
       const when = tr.done && timeSaid(timed);
       if (when) items.push([when, "aside time", timed]);
+      // a plugin or Claude Code sent it, out of magpie's sight: said, so
+      // its missing split doesn't read as a request that lost it (lute)
+      if (tr.done && !tr.net && tryOk(tr) && SENT_BY[tr.sentBy]) items.push([t(SENT_BY[tr.sentBy]), "aside"]);
       // each model Copilot's Auto picked for it, where from, and whether
       // Copilot refused it, on which API and with Auto's session token or
       // without (#256)
@@ -956,7 +973,109 @@ let groups = null, gEdit = null;
       if (tr.done && tryOk(tr) && tr.upstream) items.push([upstreamWhy(tr), "aside upstream-said", tr]);
     });
     if (r.done && !r.tries.length) items.push([t("Nothing was tried: {error}", { error: r.error || r.status }), "bad"]);
+    // one magpie held too long before routing it was stopped, and what
+    // held it saved to a report (the app's log goes only to stderr, which
+    // its user can't reach): its line copies it. Its name rides as the
+    // line's model, so another held request's line is drawn anew.
+    if (r.done && r.held) items.push([t("magpie saved a report of where it held this request. If it keeps happening, send the report with yours."), "aside held", { model: r.held }]);
+    return items;
+  }
 
-return items;}
+const lapseOf = (w) => known0(w.lapse) ? at(w.lapse) : 0;
+
+function noneWhy(r) {
+    if (!r.done) return r.phase === "redact"
+      ? t("magpie is masking this request before routing it (Settings › Privacy), so who takes it isn't picked yet.")
+      : t("magpie hasn't routed this request yet, so who takes it isn't picked yet.");
+    if (r.error) return t("Nothing took this request: {error}", { error: r.error });
+    return t("Nothing could take {model}.", { model: r.model });
+  }
+
+function walletWhy(r, f) {
+    const o = r.order.find((x) => x !== f && !x.fallback && !x.rest && x.balance != null && x.provider === f.provider && x.unit === f.unit);
+    return f.balance != null && o && f.balance > o.balance
+      ? t("{who} goes first: of those alike, its wallet has the most left — {n}, where {other} has {m}.", { who: who(f), n: balText(f), other: who(o), m: balText(o) }) : null;
+  }
+
+const expiresAt = (w, k) => {
+    const H = 3600e3, x = renewsBy(w)[k], l = lapseOf(w);
+    return !!x && !!l && Math.floor(x / H) === Math.floor(l / H) && !known0(w.restarts);
+  };
+
+const leftWhy = (x) => x.heldOwn
+    ? t("{who} is left out: {group} names another account for this model.", { who: who(x), group: x.heldBy })
+    : x.heldBy
+    ? t("{who} is left out: the routing group {group} is held to other accounts of its provider.", { who: who(x), group: x.heldBy })
+    : x.held
+    ? t("{who} is left out: the gateway key asking may not use its account.", { who: who(x) })
+    : x.window
+    ? t("{who} is left out: this request is longer than its {n} context window, so it would only refuse it. It's asked only once every one with room is out of its allowance.", { who: who(x), n: ctxShort(x.window) })
+    : x.noCredits
+    ? t("{who} is left out: a usage window is used up, and the account is set not to spend its credits, so it counts as used up until that window renews.", { who: who(x) })
+    : x.capped
+    ? t("{who} is left out: a usage window is at {n}, past the {cap}% cap set on the account, so it counts as used up until that window renews.", { who: who(x), n: pct(x.used), cap: x.capped })
+    : x.barred
+    ? t("{who} is left out: it is set to serve other models, not {model}.", { who: who(x), model: x.model })
+    : x.kind === "key"
+    ? t("{who} is left out: {name} lists {model} to its other keys, not this one.", { who: who(x), name: x.name, model: x.model })
+    : t("{who} is left out: its plan doesn't list {model}.", { who: who(x), model: x.model });
+
+const intentOf = (c) => /^intent "(.*)"$/.exec(c)?.[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+
+function whereText(c) {
+    const v = String(c.value ?? "");
+    switch (c.field) {
+      case "tokens": return t("{op} {n} tokens", { op: TOKEN_OPS[c.op] || c.op, n: (+v || 0).toLocaleString(intlLang()) });
+      case "effort":
+        if (c.op === "gte") return t("reasoning ≥ {level}", { level: v });
+        if (c.op === "lte") return t("reasoning ≤ {level}", { level: v });
+        if (v === "off" || v === "on") return (c.op === "not") === (v === "on") ? t("reasoning is off") : t("reasoning on");
+        return t(c.op === "not" ? "reasoning is not {level}" : "reasoning is {level}", { level: v });
+      case "agent": {
+        const agents = v.split(",").filter(Boolean).map(agentName).join(" / ");
+        return c.op === "not" ? t("not {agents}", { agents }) : agents;
+      }
+      case "subagent": return c.op === "not" ? t("not sent by a subagent") : t("sent by a subagent");
+      case "message": return t("message {op} “{text}”", { op: t(MESSAGE_OPS[c.op] || c.op), text: v });
+      case "system": return t("system prompt {op} “{text}”", { op: t(MESSAGE_OPS[c.op] || c.op), text: v });
+      case "last": return t("last user message {op} “{text}”", { op: t(MESSAGE_OPS[c.op] || c.op), text: v });
+    }
+    return [c.field, c.op, v].filter(Boolean).join(" ");
+  }
+
+function movedSays(r) { return !!r.moved && r.kind !== "connection_check"; }
+
+function movedWhy(r) {
+    const agent = agentName(r.agent), v = { agent, model: r.model, to: r.moved.to };
+    switch (r.moved.why) {
+      case "desktop-title": return t("{agent} picked {model} by itself for a short request without tools, such as a chat's title; magpie served it on {to}, the model of its latest chat turn, so it stays with the provider the chat is on.", v);
+      case "desktop-title-first": return t("{agent} picked {model} by itself for a short request without tools, such as a chat's title; magpie served it on {to}, the first model it lists, as it has had no chat turn yet.", v);
+      case "desktop-gone": return t("{agent} asked for {model}, which magpie doesn't serve; magpie served it on {to}, the model of its latest chat turn.", v);
+      case "desktop-gone-first": return t("{agent} asked for {model}, which magpie doesn't serve; magpie served it on {to}, the first model it lists.", v);
+      case "desktop-tier": return t("Claude Code in {agent} asked for {model}, its own id for a Claude tier; magpie served it on {to}, the model picked for that tier.", v);
+      case "desktop-beside": return t("Claude Code in {agent} asked for {model} for a call of its own; magpie served it on {to}, that tier's model on the provider the chat is on.", v);
+      case "desktop-aside": return t("Claude Code in {agent} asked for {model} for a call of its own; magpie served it on {to}, the chat's model, so it stays with the provider the chat is on.", v);
+      case "classifier": return t("{agent}'s auto mode classifier asked for {model}; magpie served it on {to}, the model /model moved its tier to.", v);
+      case "claude-tier": return t("{agent} asked for {model} by Claude's full id; magpie served it on {to}, the model set for that tier.", v);
+      case "stand-in": return t("{agent} asked for {model}, which magpie doesn't serve; magpie served it on {to}, the model its config names.", v);
+      case "codex-turn": return t("{agent} asked for {model} for a call of its own, which magpie doesn't serve; magpie served it on {to}, the model its last turn was answered on.", v);
+      case "codex-follow": return t("{agent} asked for {model}, one of its own default models, for its memories, and its config names no model for them; magpie served it on {to}, the model of its conversation.", v);
+      case "dsh-compact": return t("{agent} asked for {model} to compact its conversation; magpie served it on {to}, the model set for its compaction.", v);
+      case "dsh-compact-rested": return t("{agent} asked for {model} to compact its conversation, and its provider is out of its limit; magpie served it on {to}, the same model from another provider.", v);
+      case "privacy": return t("Masking would have changed this request, so magpie sent it as written to {to}, the model set for that in Settings › Privacy.", v);
+      default: return t("magpie served it on {to} in place of {model}.", v);
+    }
+  }
+
+const SENT_BY = {
+    plugin: "Its plugin sent this request itself, so magpie can't split its time",
+    claude: "Claude Code sent this request itself, so magpie can't split its time",
+  };
+
+const balText = (w) => (countFormat.format(w.balance) + " " + t(w.unit || "")).trim();
+
+const TOKEN_OPS = { gte: "≥", gt: ">", lt: "<", lte: "≤" };
+
+const MESSAGE_OPS = { contains: "has the words", excludes: "doesn't have the words", starts: "starts with the words", matches: "matches the expression" };
  return {items:()=>items(route),outcome:()=>route.done&&route.tries.length?tryWhy(route,route.tries.length-1):affWhy(route,true)||ruleWhy(route,true)||firstWhy(route),description:mode=>t(modeOf(mode)[1]),rest:(rest,from)=>restWhen(rest,from),failure:failWord};
 }

@@ -1,5 +1,6 @@
+import identities from './agents.mjs';
 import {l, locale} from './i18n.mjs';
-export const agents = { codex: 'Codex', claude: 'Claude Code', 'claude-code': 'Claude Code', 't3-code': 'T3 Code', t3code: 'T3 Code', t3: 'T3 Code' };
+export const agents = Object.fromEntries(Object.entries(identities).map(([id,agent])=>[id,agent.name]));
 // Magpie client.js hueOf: a known agent keeps its colour; anything else takes
 // a spare that is never red, so a failure stays distinct from "in flight".
 const hues = { claude: '#d97757', 'claude-code': '#d97757', codex: '#6366f1', gemini: '#0ea5e9', copilot: '#a855f7', cursor: '#14b8a6', opencode: '#eab308', crush: '#ec4899', goose: '#84cc16', pi: '#10b981', omp: '#d946ef', omo: '#7c3aed', dsh: '#06b6d4', commandcode: '#f97316', mimocode: '#3b82f6', deveco: '#3c99cc' };
@@ -11,11 +12,12 @@ export function agentHue(id) {
   return spare[hash % spare.length];
 }
 export const agentName = id => agents[id] || id || l("未辨識 Agent");
-export const routingName = value => ({ rotate: l("輪流"), order: l("依序"), usage: l("較少用量優先"), pace: l("按剩餘配額"), weight: l("按權重"), free: l("免費優先") }[value] || l("智慧路由"));
+export const routingName = value => ({ rotate: l("輪流"), order: l("依序"), usage: l("較少用量優先"), pace: l("按剩餘配額"), weight: l("按權重"), free: l("免費優先"), drain: l("Until used up"), manual: l("Manual"), cheap: l("Cheapest first"), expiring: l("Free quota by expiry"), fast: l("Speed first") }[value] || l("智慧路由"));
 export const phaseName = value => ({ slot: l("等待空位"), rpm: l("等待速率限制"), upstream: l("等待上游"), redact: l("遮蔽敏感資料"), routing: l("路由中") }[value] || l("處理中"));
 export const reasonName = value => ({ quota: l("額度用盡"), rate: l("速率限制"), 'rate-limit': l("速率限制"), credit: l("餘額不足"), credits: l("餘額不足"), restricted: l("帳號受限制"), auth: l("驗證失敗"), busy: l("上游繁忙") }[value] || value);
 export function routeStatus(route) {
   if (!route.done) return { tone: 'working', label: l("回應中") };
+  if (route.canceled || route.fail === 'canceled' || route.tries.at(-1)?.fail === 'canceled') return { tone: 'done', label: l('Canceled') };
   if (route.error || route.status >= 400) return { tone: 'failed', label: l("失敗") };
   return { tone: 'done', label: l("已完成") };
 }
@@ -25,6 +27,7 @@ export function candidateState(candidate, route, lifted = {}) {
   const liveRest = value => value && Date.parse(value.until) > Date.now() && !(value.key && Date.parse(lifted[value.key]) >= Date.parse(route.time));
   if (last) {
     if (!last.done) return { tone: 'working', label: l("回應中"), selected: true, attempts };
+    if (last.fail === 'canceled') return { tone: 'done', label: l('Canceled'), selected: false, attempts };
     if (last.status >= 400 || last.error || last.fail) return { tone: 'failed', label: reasonName(last.fail) || `HTTP ${last.status || route.status}`, selected: false, attempts };
     return { tone: 'done', label: l("回答了這個請求"), selected: true, attempts };
   }
