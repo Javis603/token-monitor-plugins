@@ -30,3 +30,10 @@ test('the shipped plugin contains a complete 0.1.0 summary for every README lang
   const files = Object.fromEntries(Object.values(CHANGELOG_FILES).map(name => [name, fs.readFileSync(new URL(name, root))]));
   assert.equal(Object.keys(packageChangelog(files, '0.1.0')).length, 6);
 });
+
+ test('candidate version includes all localized release notes', () => {
+  const root = new URL('../plugins/magpie-routes/', import.meta.url);
+  const manifest = JSON.parse(fs.readFileSync(new URL('manifest.json', root)));
+  const files = Object.fromEntries(Object.values(CHANGELOG_FILES).map(name => [name, fs.readFileSync(new URL(name, root))]));
+  assert.equal(Object.keys(packageChangelog(files, manifest.version)).length, 6);
+});

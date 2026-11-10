@@ -1,16 +1,17 @@
+import {hitPct} from './formats.mjs';
 import {l, locale} from './i18n.mjs';
-// Context card ported from yetone/magpie f2b4b989, MIT. See SOURCE-NOTICE.md.
-import { el, svg as elementSVG } from './graphics.mjs';
+// Context card ported from yetone/magpie 9c39edb9, MIT. See SOURCE-NOTICE.md.
+import { el, brand, svg as elementSVG } from './graphics.mjs';
 import { agentName } from './model.mjs';
 import { contextText as t } from './context-i18n.mjs';
 
 export function contextSeries(route, routes) {
   if (!route?.sessionKey || route.kind) return null;
   return routes.filter(row => row.prompt && !row.kind && row.agent === route.agent && row.sessionKey === route.sessionKey)
-    .sort((a,b) => a.id-b.id).map(row => ({id:row.id,tokens:row.prompt.tokens,time:row.time}));
+    .sort((a,b) => a.id-b.id).map(row => ({id:row.id,tokens:row.prompt.tokens,window:row.prompt.window,time:row.time}));
 }
 
-export function createContextView(actions) {
+export function createContextView(actions, ctx) {
   const node = el('section', 'rr-context');
   node.setAttribute('aria-label', l("上下文視窗"));
   let card, current, disposed = false;
@@ -29,6 +30,28 @@ export function createContextView(actions) {
     tabs.forEach(([id,name])=>{const b=el('button','opt',name);b.type='button';b.dataset.id=id;b.setAttribute('aria-pressed',String(id===selected));
       b.onclick=()=>{for(const x of n.children)x.setAttribute('aria-pressed',String(x===b));pick(id);};n.append(b);});return n;
   };
+const LABS = [[/claude/, "claude-color"], [/gpt|^o\d|codex/, "openai"], [/gemma/, "gemma-color"], [/gemini/, "gemini-color"],
+    [/deepseek/, "deepseek-color"], [/qwen|qwq/, "qwen-color"], [/kimi|moonshot/, "kimi"], [/glm/, "zhipu-color"], [/grok/, "grok"],
+    [/minimax|abab/, "minimax-color"], [/doubao|seed/, "doubao-color"], [/stral/, "mistral-color"], [/llama/, "meta-color"],
+    [/mimo/, "xiaomimimo"], [/^step/, "stepfun-color"], [/hunyuan/, "hunyuan-color"]];
+const labIcon = (model) => {
+    const m = model.toLowerCase().split("/").pop();
+    const hit = LABS.find(([re]) => re.test(m));
+    return hit ? [brand(ctx,hit[1])] : [];
+  };
+function stackBar(p) {
+    const w = p.window || 0, bar = el("span", "ctx-stack"), scale = Math.max(w, p.tokens, 1);
+    bar.setAttribute("role", "img");
+    bar.setAttribute("aria-label", t("{used} of {window} tokens used", { used: fmtK(p.tokens), window: fmtK(w || p.tokens) }));
+    for (const k of PARTS) {
+      const i = el("i", "k-" + k), n = (p.parts || []).find((x) => x.kind === k)?.tokens || 0;
+      i.title = partName(k);
+      i.style.width = +(Math.max(0, n) / scale * 100).toFixed(2) + "%";
+      bar.append(i);
+    }
+    return bar;
+  }
+  const agentIcon = id => brand(ctx,id);
   const PARTS = ["system", "tools", "skills", "memory", "files", "results", "chat"];
   const PART_NAMES = {
     system: "System prompt", tools: "Tools", skills: "Skills", memory: "Memory",
@@ -157,8 +180,7 @@ export function createContextView(actions) {
   // its request
   function spark(series, at, window, onPoint) {
     const W = 240, H = 34, pad = 3;
-    // scaled to the session's peak, so a session that never came near its
-    // window still shows how it grew; the window's line shows once it is near
+    // scaled to its peak; the window's line shows once it is near
     const peak = Math.max(...series.map((p) => p.tokens), 1);
     const top = window && peak > window * 0.6 ? Math.max(window, peak) : peak * 1.2;
     const x = (i) => series.length < 2 ? W / 2 : pad + (i / (series.length - 1)) * (W - pad * 2);
@@ -192,7 +214,9 @@ export function createContextView(actions) {
       if (!onPoint) return;
       const hit = ns("rect", { x: x(i) - Math.max(2, W / series.length / 2), y: 0, width: Math.max(4, W / series.length), height: H, class: "hit" + (on ? " on" : "") });
       const tip = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      tip.textContent = t("Request {n}: {tokens} tokens", { n: i + 1, tokens: fmtK(p.tokens) });
+      const w = p.window || window;
+      tip.textContent = w ? t("Request {n}: {tokens} of {window} ({pct})", { n: i + 1, tokens: fmtK(p.tokens), window: fmtK(w), pct: pct(p.tokens / w) })
+        : t("Request {n}: {tokens} tokens", { n: i + 1, tokens: fmtK(p.tokens) });
       hit.append(tip);
       hit.setAttribute("role", "button"); hit.setAttribute("tabindex", "0");
       hit.setAttribute("aria-label", tip.textContent);
@@ -217,6 +241,7 @@ export function createContextView(actions) {
     for (const e of all) {
       if (!e.target.isConnected) { cardSizes.unobserve(e.target); continue; }
       const card = e.target, w = e.contentRect.width;
+      if (!w) continue; // out of sight (#4652)
       cardWidth[card.dataset.place] = w;
       // on the next frame: a class changed in the observer's own call
       // changes the card's height, which WebKit reports as a
@@ -327,7 +352,7 @@ export function createContextView(actions) {
   // to read goes in one tile with the part's other small ones; a part too
   // small for its items is one tile. Each tile: key (stays across draws),
   // kind, its item (it), the items it stands for (its), rect in px.
-  const TILE_MIN = 1500, TILE_MAX = 12, TILE_FLOOR = 700;
+  const TILE_MIN = 1500, TILE_MAX = 12, TILE_FLOOR = 700, TILE_SIDE = 16;
   // the look switch's marks: tiles, and a grid of cells
   const LOOK_MAP = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1.5" y="2" width="5.5" height="12" rx="1.6"/><rect x="8.5" y="2" width="6" height="6.5" rx="1.6"/><rect x="8.5" y="10" width="6" height="4" rx="1.4"/></svg>';
   const LOOK_GRID = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">' +
@@ -351,7 +376,20 @@ export function createContextView(actions) {
       const lo = (sum * TILE_FLOOR) / Math.max(1, area);
       return vals.map((a) => ({ ...a, v: Math.max(a.v, lo) }));
     };
-    for (const r of squarify(floored(parts.map((x) => ({ v: x.tokens, x })), ur[2] * ur[3]), ...ur)) {
+    // and a part's tile is TILE_SIDE px across both ways: the floor is an
+    // area, and a part laid in a long row beside large ones met it as a
+    // strip (49 tokens of memory beside 70K: 190×4px, under the tiles' 3px
+    // gap, so it was hidden; AIGCFREE on Discord). One too thin has its
+    // value raised by as much and the parts are laid again.
+    const partVals = floored(parts.map((x) => ({ v: x.tokens, x })), ur[2] * ur[3]);
+    let partRects = squarify(partVals, ...ur);
+    for (let n = 0; n < 8; n++) {
+      const thin = partRects.filter((r) => Math.min(r.w, r.h) < TILE_SIDE);
+      if (!thin.length) break;
+      for (const r of thin) r.a.v *= (TILE_SIDE / Math.max(1, Math.min(r.w, r.h))) * 1.05;
+      partRects = squarify(partVals, ...ur);
+    }
+    for (const r of partRects) {
       const x = r.a.x;
       const items = (x.items || []).filter((it) => it.tokens > 0).sort((a, b) => b.tokens - a.tokens);
       const isum = items.reduce((s, it) => s + it.tokens, 0);
@@ -440,11 +478,9 @@ export function createContextView(actions) {
     contents.append(ch, list);
     let parts = null, cur = null, cacheShown = false, lastCache = null, cacheWhose = "", chKey = "";
     let tab = opts.tab || "all", more = false;
-    const inspectPart = (kind) => {
-      ch.querySelector(`[data-id="${kind}"]`)?.click();
-      more = true; drawRows();
-    };
 
+    // Inspect the projected metadata only; never fetch upstream prompt text.
+    const inspectPart = kind => { ch.querySelector(`[data-id="${kind}"]`)?.click(); more = true; drawRows(); };
     const showTip = (target) => {
       const { p, window, cells, partOf } = cur;
       const idx = [...grid.children].indexOf(target);
@@ -539,7 +575,7 @@ export function createContextView(actions) {
       showMapTip(n);
     });
     map.addEventListener("pointerleave", () => { tip.hidden = true; unfocus(); });
-    // Gateway exposes metadata only: select the corresponding content category.
+    // Inspect the projected metadata for the tile.
     map.addEventListener("click", (e) => {
       const n = tileAt(e);
       if (!n || n._tile.free) return;
@@ -604,14 +640,14 @@ export function createContextView(actions) {
         n.style.height = `max(0px, calc(${pc(tl.h, H)}% - 3px))`;
         if (quiet || !n.animate || !(fresh || enter)) return;
         n.animate([{ opacity: 0, transform: "scale(.94)", filter: "blur(4px)" }, { opacity: 1, transform: "none", filter: "none" }],
-          { duration: 560, easing: IOS_EASE, delay: enter ? 40 + Math.min(i, 16) * 32 : 0, fill: "backwards" });
+          { duration: 380, easing: IOS_EASE, delay: enter ? 30 + Math.min(i, 16) * 20 : 0, fill: "backwards" });
       });
       for (const [k, n] of tiles) {
         if (seen.has(k)) continue;
         tiles.delete(k);
         n.classList.add("gone");
         if (quiet || !n.animate) { n.remove(); continue; }
-        n.animate([{ opacity: 1 }, { opacity: 0, transform: "scale(.96)" }], { duration: 260, easing: IOS_EASE, fill: "forwards" })
+        n.animate([{ opacity: 1 }, { opacity: 0, transform: "scale(.96)" }], { duration: 180, easing: IOS_EASE, fill: "forwards" })
           .finished.then(() => n.remove(), () => n.remove());
       }
     };
@@ -644,14 +680,14 @@ export function createContextView(actions) {
       const h1 = viz.offsetHeight;
       if (h0 !== h1) {
         viz.style.overflow = "hidden";
-        viz.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 520, easing: IOS_EASE })
+        viz.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 340, easing: IOS_EASE })
           .finished.finally(() => { viz.style.overflow = ""; }).catch(() => {});
       }
     };
 
     grid.addEventListener("pointerover", (e) => { if (cur && e.target.parentElement === grid) showTip(e.target); });
     grid.addEventListener("pointerleave", () => { tip.hidden = true; delete grid.dataset.f; });
-    // Cells select their corresponding content category.
+    // Inspect the projected metadata for the cell.
     grid.addEventListener("click", (e) => {
       if (!cur || e.target.parentElement !== grid) return;
       const c = cur.cells[[...grid.children].indexOf(e.target)];
@@ -685,7 +721,8 @@ export function createContextView(actions) {
         if (it.n > 1 && it.tag !== "turns" && it.tag !== "more") row.append(el("span", "ctx-x", "×" + it.n));
         if (tg) row.append(el("code", "ctx-tag", tg));
         row.append(bar, el("span", "ctx-v", fmtK(it.tokens)));
-        // Prompt text is GUI-only; rows expose metadata and hover linking.
+        // clicked, its text
+
         // its cells light up
         row.onpointerenter = () => {
           grid.dataset.f = "item";
@@ -713,7 +750,6 @@ export function createContextView(actions) {
         parts = cur = null;
         return;
       }
-
       const window = p.window || 0;
       const full = window ? p.tokens / window : 0;
       const live = !r.done;
@@ -761,24 +797,31 @@ export function createContextView(actions) {
         const short = el("span", "ctx-short");
         short.append(num("span", "", p.tokens), window ? " / " + fmtK(window) + " · " + pct(full) : "");
         head.append(short);
-        // folded, a thin bar of what fills the window, a part each; it is
-        // morphed with the head, so a live request moves its widths only
-        const bar = el("span", "ctx-stack");
-        bar.setAttribute("role", "img");
-        bar.setAttribute("aria-label", t("{used} of {window} tokens used", { used: fmtK(p.tokens), window: fmtK(window || p.tokens) }));
-        const scale = Math.max(window, p.tokens, 1);
-        for (const k of PARTS) {
-          const n = p.parts.find((x) => x.kind === k)?.tokens || 0;
-          const i = el("i", "k-" + k);
-          i.title = partName(k);
-          i.style.width = +(Math.max(0, n) / scale * 100).toFixed(2) + "%";
-          bar.append(i);
-        }
-        head.append(bar);
+        // folded, the bar: morphed, so a live request moves widths only
+        head.append(stackBar(p));
       }
       head.append(el("span", "grow"));
-      if (r.model) head.append(el("code", "ctx-model", r.model));
-      head.append(st);
+      // whose request it is and the model it went to; in a narrow card the
+      // agent's name goes first, its icon stays
+      const route = el("span", "ctx-route");
+      if (r.agent) {
+        const who = el("span", "ctx-who");
+        who.append(agentIcon(r.agent), el("span", "ctx-who-n", agentLabel(r.agent)));
+        route.append(who);
+      }
+      if (r.model) {
+        const what = el("span", "ctx-what");
+        what.append(...labIcon(r.model), el("code", "ctx-model", r.model));
+        if (r.agent) route.append(el("span", "ctx-sep", "›"));
+        route.append(what);
+      }
+      // the route and the state go together: where the title leaves them
+      // too little room they take a line of their own, the model id cut
+      // to fit there, and nothing is drawn over the title (packinggoods on
+      // Discord: in a narrow window the provider's icon sat on it)
+      const end = el("span", "ctx-end");
+      end.append(route, st);
+      head.append(end);
 
       // how full, and the cache
       const top = el("div", "ctx-top");
@@ -822,7 +865,7 @@ export function createContextView(actions) {
         const c = el("div", "ctx-stat ctx-cache" + (!known && shown ? " was" : shown ? "" : " none"));
         c.append(el("div", "ctx-k", t("Prompt cache")));
         const cb = el("div", "ctx-big");
-        cb.append(el("b", "", shown ? pct(shown.read / shown.total) : "—"), el("span", "", t("hit")));
+        cb.append(el("b", "", shown ? hitPct(shown.read / shown.total) : "—"), el("span", "", t("hit")));
         const bar = el("div", "ctx-bar");
         const fillBar = el("i");
         fillBar.style.width = (shown ? (shown.read / shown.total) * 100 : 0).toFixed(1) + "%";
@@ -934,9 +977,9 @@ export function createContextView(actions) {
       else if (sp) card.insertBefore(parts.sp = sp, tip);
       else if (parts.sp) { parts.sp.remove(); parts.sp = null; }
     };
-    card.ctxDispose = () => { cardSizes.unobserve(card); mapSizes.disconnect(); card.remove(); };
     card.ctxUpdate = (r, next) => { Object.assign(opts, next); fill(r, opts); };
     fill(r, opts);
+    card.ctxDispose = () => { cardSizes.unobserve(card); mapSizes.disconnect(); card.remove(); };
     return card;
   }
 

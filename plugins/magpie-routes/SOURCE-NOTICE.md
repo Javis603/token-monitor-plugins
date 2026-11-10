@@ -2,7 +2,9 @@
 
 This plugin adapts the routing stage proportions, account-row anatomy, flight-layer approach, play/fly/pose/home choreography and beating-wing carrier artwork from `yetone/magpie`, Copyright (c) 2026 yetone, MIT License. The complete license is included in MAGPIE-LICENSE.txt.
 
-Reference revision: f2b4b98948d0aeb7f1baa3929aeb6ead0d679437
+Reference revision for routing explanations, context cards, translations, agent identities and bundled marks: 9c39edb92cab08eae43602f6a839baa4fc892b95 (2026-11-10).
+
+The Token Monitor stage/flight adapter retains the choreography originally adapted at f2b4b98948d0aeb7f1baa3929aeb6ead0d679437. Upstream GUI-only controls are not part of this plugin.
 
 - `internal/gui/assets/plugins/routing/client.js`: route graph, multi-route staging and account/model seat identity; FLIER artwork, flight geometry and timings (request → held packet → reply / failover); logoed/renderSteps story anatomy and source wording helpers (affinity/rules/rest/failover/subagents/auxiliary purposes); timeParts/timeSaid/timeElement and original timing DOM.
 - `internal/gui/assets/plugins/routing/routing.css`: stage, account rows, wire layers, flap animation, original narrative hierarchy, 400ms caption fade/rise and inline stacked timing bar/phase legend.
@@ -10,7 +12,8 @@ Reference revision: f2b4b98948d0aeb7f1baa3929aeb6ead0d679437
 - `internal/gui/assets/context.css`: scoped context card geometry and data colors; fills adapted to Token Monitor material.
 - `internal/gui/assets/i18n.js`: Traditional Chinese routing, timing and context labels.
 - `internal/gui/assets/purposes.js`: auxiliary request purpose names used by routing explanations.
-- `internal/gui/assets/icons/`: the vendor mark set at the reference revision, minus the app icons (`app-*`, `icon-512.png`, `apple-touch-icon.png`). Colour slugs and the raster set render as images; every other slug is a mono mask. `rtk.png` is treated as a raster even though Magpie's `pngIcons` omits it, because masking a PNG draws nothing. User pictures served as `file:` icons are not bundled. `magpie.svg` and `magpie-identity.png` retain the Magpie bird artwork; `t3code.svg` retains its upstream attribution comment. Bundling a mark does not transfer its ownership to this plugin.
+- `internal/agent/`: public built-in agent names and icon slugs, including the parameterized constructors, are bundled in `agents.mjs`. The gateway trace does not expose the GUI client registry; no GUI settings or credentials are read. Unknown client IDs retain their label and use a generic mark when no bundled icon matches.
+- `internal/gui/assets/icons/`: the vendor mark set at the reference revision, minus the app icons (`app-*`, `icon-512.png`, `apple-touch-icon.png`). Colour slugs and the raster set render as images; every other slug is a mono mask. Bundled PNG marks render as images, including `rtk.png`. User pictures served as `file:` icons are not bundled. `magpie.svg` and `magpie-identity.png` retain the Magpie bird artwork; `t3code.svg` retains its upstream attribution comment. Bundling a mark does not transfer its ownership to this plugin.
 
 The shared trace backend is this plugin's implementation. Notch and Edge Dock are independent layouts designed for Token Monitor's native containers; they are not copies of Magpie's desktop page. This is a Token Monitor community integration maintained by Javis, not an official Magpie plugin.
 

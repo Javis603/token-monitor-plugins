@@ -50,33 +50,96 @@ app.whenReady().then(async () => {
   await new Promise(resolve => setTimeout(resolve, 150));
   fs.writeFileSync(path.join(evidence, 'plugin-cards.png'), (await win.webContents.capturePage(cardClip)).toPNG());
   const gateway = require('../plugins/magpie-routes/gateway.cjs');
-  const row = { id: 1, session: 'synthetic-session', agent: 't3-code', model: 'gpt-6.1-sol', provider: 'codex', time: new Date().toISOString(), phase: 'upstream', done: false,
+  const row = { id: 1, session: 'synthetic-session', agent: 'dsh', model: 'gpt-6.1-sol', provider: 'codex', time: new Date().toISOString(), phase: 'upstream', done: false,
     order: [{ id: 'demo-a', provider: 'codex', name: 'demo-a@example.test', model: 'gpt-6.1-sol', used: 42, rank: 1 }, { id: 'demo-b', provider: 'codex', name: 'demo-b@example.test', model: 'gpt-6.1-sol', used: 18, rank: 2 }],
     tries: [{ id: 'demo-a', model: 'gpt-6.1-sol', done: false }],
     prompt: { tokens: 12000, window: 128000, turns: 3, parts: [{ kind: 'system', tokens: 2000, items: [] }, { kind: 'tools', tokens: 1000, items: [] }, { kind: 'files', tokens: 4000, items: [{ name: 'demo.ts', tokens: 4000 }] }, { kind: 'results', tokens: 2000, items: [] }, { kind: 'chat', tokens: 3000, items: [] }] } };
   const projected = gateway.trace({ object: 'trace', pid: 1, seq: 1, ids: [1], routes: [row], totals: { requests: 12, rerouted: 1, errors: 0 } });
+  const strict = gateway.trace({object:'trace',pid:1,seq:1,ids:[1],totals:{},routes:[{...row,
+    affinity:{why:'strict',last:'demo-a',main:{id:'main',kind:'account',name:'Provider',who:'main-private@example.test'}}}]});
   const magpie = { connection: 'online', endpoint: '127.0.0.1:3425', version: 'synthetic fixture', updatedAt: Date.now(), routes: projected.routes,
-    totals: projected.totals, lifted: {}, active: [{ id: 1, route: 1, agent: 't3-code', model: 'gpt-6.1-sol', phase: 'upstream', ms: 1000 }], activityAvailable: true, maskAccounts: true };
+    totals: projected.totals, lifted: {}, active: [{ id: 1, route: 1, agent: 'dsh', model: 'gpt-6.1-sol', phase: 'upstream', ms: 1000 }], activityAvailable: true, maskAccounts: true };
   await win.webContents.executeJavaScript(`(async()=>{
     document.getElementById('settings').classList.add('hidden');document.getElementById('title').textContent='Magpie 路由 · 合成資料';
     const root=document.getElementById('surface'),header=document.getElementById('header-actions');
     const css=${JSON.stringify(manifests['magpie-routes'].css)};for(const file of css){const link=document.createElement('link');link.rel='stylesheet';link.href='tm-plugin://magpie-routes/'+file;document.head.append(link)}
     const plugin=await import('tm-plugin://magpie-routes/ui.mjs');
-    const ctx={asset:name=>'tm-plugin://magpie-routes/'+name,backend:{call:async()=>(${JSON.stringify(magpie)}),subscribe:()=>()=>{}},app:{reportBubbleSize(){}}};
+    const ctx={asset:name=>'tm-plugin://magpie-routes/'+name,backend:{call:async()=>(${JSON.stringify(magpie)}),subscribe:fn=>{window.pushMagpie=fn;return()=>{}}},app:{reportBubbleSize(){}}};
     window.magpie=await plugin.activate(ctx);
     let missing=false;try{magpie.mount(root,{surface:'page',visible:true})}catch(e){missing=/Token Monitor/.test(e.message)}
     check('missing-header-host-reports-clear-requirement',missing);
     window.page=magpie.mount(root,{surface:'page',visible:true,headerActions:header,nativeData:{appearance:{reduceMotion:'on'}}});
     await new Promise(r=>setTimeout(r,150));
     check('magpie-page-renders-real-graph',root.querySelectorAll('svg').length>0&&root.textContent.includes('gpt-6.1-sol'));
+    check('dsh-source-name',root.textContent.includes('DeepSeek Harness'));
+    const whale=root.querySelector('.rr-source [data-brand="deepseek-color"] img');await whale.decode();
+    check('dsh-whale-is-loaded',whale.naturalWidth>0);
+    window.nextMagpie=${JSON.stringify(magpie)};
+    nextMagpie.routes[0].prompt.tokens=24000;pushMagpie(nextMagpie);
+    check('context-live-update',root.querySelector('.ctx-card').textContent.includes('24K'));
+    window.contextIconMeasurements={};
+    for(const [name,selector,expected] of [['agent','.ctx-who > .rr-brand',14],['model','.ctx-what > .rr-brand',12]]){
+      const rect=root.querySelector(selector).getBoundingClientRect();
+      contextIconMeasurements[name]={width:rect.width,height:rect.height};
+      check('context-'+name+'-icon-'+expected+'px ('+rect.width+'x'+rect.height+')',rect.width===expected&&rect.height===expected);
+    }
+    const before=root.querySelector('.ctx-card');
+    nextMagpie.routes[0].prompt=null;pushMagpie(nextMagpie);
+    check('context-card-removed-without-prompt',!root.querySelector('.ctx-card'));
+    nextMagpie.routes[0].prompt=${JSON.stringify(projected.routes[0].prompt)};pushMagpie(nextMagpie);
+    check('context-card-restored',root.querySelectorAll('.ctx-card').length===1&&!before.isConnected);
+    root.querySelector('.ctx-tile.k-files')?.click();
+    check('context-inspects-metadata-only',root.querySelector('.ctx-contents').textContent.includes('demo.ts'));
+
+    const restore=structuredClone(nextMagpie);
+    const auxiliary=structuredClone(nextMagpie.routes[0]);
+    auxiliary.kind='compact';auxiliary.done=true;auxiliary.sessionKey='aux-session-a';
+    auxiliary.usage=[{in:50,cache_read:50}];auxiliary.prompt.counted=true;
+    nextMagpie.routes=[auxiliary];pushMagpie(nextMagpie);
+    const cacheText=()=>root.querySelector('.ctx-cache .ctx-big b')?.textContent;
+    check('aux-context-records-session-cache',cacheText()==='50%');
+    auxiliary.id++;auxiliary.done=false;auxiliary.usage=[];auxiliary.prompt.counted=false;pushMagpie(nextMagpie);
+    check('aux-context-retains-same-session-cache',cacheText()==='50%');
+    auxiliary.id++;auxiliary.sessionKey='aux-session-b';pushMagpie(nextMagpie);
+    check('aux-context-does-not-leak-other-session-cache',cacheText()==='—');
+    auxiliary.sessionKey='';auxiliary.done=true;auxiliary.usage=[{in:50,cache_read:50}];auxiliary.prompt.counted=true;pushMagpie(nextMagpie);
+    auxiliary.id++;auxiliary.done=false;auxiliary.usage=[];auxiliary.prompt.counted=false;pushMagpie(nextMagpie);
+    check('aux-context-without-session-isolates-requests',cacheText()==='—');
+    pushMagpie({...restore,routes:${JSON.stringify(strict.routes)}});
+    const privateName='main-private@example.test';
+    check('strict-main-account-uses-existing-blur',[...root.querySelectorAll('.rr-pii')].some(n=>n.textContent===privateName&&getComputedStyle(n).filter.includes('blur')));
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let textNode,unmasked=false;
+    while((textNode=walker.nextNode()))if(textNode.textContent.includes(privateName)&&!textNode.parentElement.closest('.rr-pii'))unmasked=true;
+    check('strict-main-account-has-no-unmasked-copy',!unmasked);
+    pushMagpie(restore);
+    window.sparkRestore=restore;
+    const history=structuredClone(restore),earlier=structuredClone(history.routes[0]);
+    earlier.id=0;earlier.prompt.tokens=6000;earlier.done=true;
+    history.routes.push(earlier);pushMagpie(history);
+    const point=root.querySelector('.ctx-spark .hit');
+    check('context-history-point-is-keyboard-button',point?.getAttribute('role')==='button'&&point.getAttribute('tabindex')==='0');
+    check('context-history-point-has-window-label',point.getAttribute('aria-label')===point.querySelector('title').textContent&&point.getAttribute('aria-label').includes('128K'));
+    point.focus();check('context-history-point-receives-focus',document.activeElement===point);
+
     check('magpie-page-uses-header-outlet',header.children.length>0);
   })()`);
+  fs.writeFileSync(path.join(evidence,'context-icon-measurements.json'),JSON.stringify(await win.webContents.executeJavaScript('contextIconMeasurements'),null,2)+'\n');
+  win.webContents.focus();
+  for (const keyCode of ['Enter','Space']) {
+    if (keyCode==='Space') await win.webContents.executeJavaScript(`(()=>{document.querySelector('.rr-back-live').click();document.querySelector('.ctx-spark .hit').focus();})()`);
+    win.webContents.sendInputEvent({type:'keyDown',keyCode});
+    win.webContents.sendInputEvent({type:'keyUp',keyCode});
+    await win.webContents.executeJavaScript(`new Promise(r=>setTimeout(r,30))`);
+    await win.webContents.executeJavaScript(`check('context-history-${keyCode}-selects-request',document.querySelector('.ctx-crumbs').textContent.includes('#0'))`);
+  }
+  await win.webContents.executeJavaScript(`document.querySelector('.rr-back-live').click();pushMagpie(sparkRestore)`);
   await win.webContents.executeJavaScript('new Promise(r=>setTimeout(r,150))');
   fs.writeFileSync(path.join(evidence, 'page-fixture.png'), (await win.webContents.capturePage()).toPNG());
   await win.webContents.executeJavaScript(`(async()=>{
     page.dispose();const root=document.getElementById('surface'),header=document.getElementById('header-actions');root.replaceChildren();header.replaceChildren();
     for(const surface of ['notch','edgeDock']){
       const view=magpie.mount(root,{surface,visible:true,headerActions:header,nativeData:{appearance:{reduceMotion:'on'}}});await new Promise(r=>setTimeout(r,40));
+      check('dsh-'+surface+'-whale',root.querySelector('.rr-source [data-brand="deepseek-color"] img')?.getAttribute('src').endsWith('deepseek-color.svg'));
       check('magpie-'+surface+'-mounts-with-shared-header',root.children.length>0&&header.children.length>0);view.dispose();root.replaceChildren();header.replaceChildren();
     }
     document.documentElement.dataset.reduceMotion='off';
