@@ -117,3 +117,46 @@ test('routing explanations preserve reserve, account restrictions, credits and p
   const peak = project({order:[{...first,routing:'cheap',price:{input:1,output:2,peak:true}},{...first,id:'b'}]});
   assert.match(words(peak),/even at its peak price/);
 });
+
+test('classifier explanations retain the answer, prior turn and inherited reasoning', async () => {
+  const { storyItems } = await import('../plugins/magpie-routes/story.mjs');
+  const raw = {id:1,agent:'dsh',model:'m',provider:'p',order:[{id:'a',name:'Provider',model:'m',kind:'key'}],tries:[]};
+  const cases = [
+    [{intents:['Code'],said:'Unmatched',after:'Code'}, /answered “Unmatched”, which is no rule's intent/, /turn 1 was “Code”/],
+    [{intents:[],above:'high'}, /group above picked high reasoning/],
+    [{intents:[],effort:'high',score:2,afterEffort:'low'}, /turn 1 reasoned at low/],
+    [{intents:['Code'],said:'0'}, /said none/]
+  ];
+  for (const nested of [false,true]) for (const [classified,...expected] of cases) {
+    const rule = {turn:2,tokens:100,classified:{by:'Classifier',...classified,body:'secret-classifier-body'}};
+    const row = gateway.trace({object:'trace',seq:1,pid:1,ids:[1],routes:[{...raw,
+      ...(nested ? {nested:[{group:'inner',rule}]} : {rule})}],totals:{}}).routes[0];
+    const words = storyItems(row,false).map(([s])=>s).join('\n');
+    for (const match of expected) assert.match(words,match);
+    assert.equal(JSON.stringify(row).includes('secret-classifier-body'),false);
+  }
+});
+
+test('strict fallback and held-report hints use display metadata without exposing account names', async t => {
+  const { storyItems, maskText } = await import('../plugins/magpie-routes/story.mjs');
+  const main = {id:'main',kind:'account',name:'Provider',who:'main-private@example.test'};
+  const raw = {id:1,agent:'dsh',model:'m',provider:'p',done:true,held:'held-report-123.json',report:{body:'secret-report-body'},
+    order:[{id:'fallback',kind:'account',name:'Fallback provider',who:'fallback-private@example.test',model:'m',fallback:true}],tries:[],
+    affinity:{why:'strict',last:'fallback',main:{...main,body:'secret-main-body',credential:'secret-main-key'}}};
+  const row = gateway.trace({object:'trace',seq:1,pid:1,ids:[1],routes:[raw],totals:{}}).routes[0];
+  assert.deepEqual(row.affinity.main,main);
+  const words = storyItems(row,false).map(([s])=>s).join('\n');
+  assert.match(words,/Stays is Strict/);
+  assert.match(words,/main-private@example.test/);
+  assert.equal(row.held,'held-report-123.json');
+  assert.ok(storyItems(row,false).some(([s,cls])=>cls==='aside held'&&s.includes('saved a report')));
+  assert.equal(storyItems({...row,done:false},false).some(([,cls])=>cls==='aside held'),false);
+  assert.equal(JSON.stringify(row).includes('secret-'),false);
+  const masked = storyItems(row,true).map(([s])=>s).join('\n');
+  assert.doesNotMatch(masked,/main-private@example.test|fallback-private@example.test/);
+  const previous = globalThis.document;
+  globalThis.document = {createElement:()=>({})};
+  t.after(()=>{globalThis.document=previous;});
+  const names = maskText(masked,row).filter(part=>typeof part!=='string');
+  assert.ok(names.some(part=>part.className==='rr-pii'&&part.textContent===main.who));
+});

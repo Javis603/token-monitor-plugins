@@ -55,6 +55,8 @@ app.whenReady().then(async () => {
     tries: [{ id: 'demo-a', model: 'gpt-6.1-sol', done: false }],
     prompt: { tokens: 12000, window: 128000, turns: 3, parts: [{ kind: 'system', tokens: 2000, items: [] }, { kind: 'tools', tokens: 1000, items: [] }, { kind: 'files', tokens: 4000, items: [{ name: 'demo.ts', tokens: 4000 }] }, { kind: 'results', tokens: 2000, items: [] }, { kind: 'chat', tokens: 3000, items: [] }] } };
   const projected = gateway.trace({ object: 'trace', pid: 1, seq: 1, ids: [1], routes: [row], totals: { requests: 12, rerouted: 1, errors: 0 } });
+  const strict = gateway.trace({object:'trace',pid:1,seq:1,ids:[1],totals:{},routes:[{...row,
+    affinity:{why:'strict',last:'demo-a',main:{id:'main',kind:'account',name:'Provider',who:'main-private@example.test'}}}]});
   const magpie = { connection: 'online', endpoint: '127.0.0.1:3425', version: 'synthetic fixture', updatedAt: Date.now(), routes: projected.routes,
     totals: projected.totals, lifted: {}, active: [{ id: 1, route: 1, agent: 'dsh', model: 'gpt-6.1-sol', phase: 'upstream', ms: 1000 }], activityAvailable: true, maskAccounts: true };
   await win.webContents.executeJavaScript(`(async()=>{
@@ -97,6 +99,12 @@ app.whenReady().then(async () => {
     auxiliary.sessionKey='';auxiliary.done=true;auxiliary.usage=[{in:50,cache_read:50}];auxiliary.prompt.counted=true;pushMagpie(nextMagpie);
     auxiliary.id++;auxiliary.done=false;auxiliary.usage=[];auxiliary.prompt.counted=false;pushMagpie(nextMagpie);
     check('aux-context-without-session-isolates-requests',cacheText()==='—');
+    pushMagpie({...restore,routes:${JSON.stringify(strict.routes)}});
+    const privateName='main-private@example.test';
+    check('strict-main-account-uses-existing-blur',[...root.querySelectorAll('.rr-pii')].some(n=>n.textContent===privateName&&getComputedStyle(n).filter.includes('blur')));
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let textNode,unmasked=false;
+    while((textNode=walker.nextNode()))if(textNode.textContent.includes(privateName)&&!textNode.parentElement.closest('.rr-pii'))unmasked=true;
+    check('strict-main-account-has-no-unmasked-copy',!unmasked);
     pushMagpie(restore);
     window.sparkRestore=restore;
     const history=structuredClone(restore),earlier=structuredClone(history.routes[0]);

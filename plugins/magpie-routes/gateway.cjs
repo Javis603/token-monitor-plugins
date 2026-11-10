@@ -63,7 +63,12 @@ function fields(raw, strings = [], numbers = [], booleans = [], lists = []) {
 function rule(raw) {
   const result = fields(raw, ['use','effort','instead','pick','wanted','useEffort','folder'], ['n','turn','tokens'],
     ['held','waits','grown','images','unready','compact','bare'], ['more','when','then','small']);
-  if (result && object(raw.classified)) result.classified = fields(raw.classified, ['by','intent','effort','error','fallback'], ['score','sure','ms'], ['cached'], ['intents']);
+  if (result && object(raw.classified)) result.classified = fields(raw.classified, ['by','intent','effort','error','fallback','said','above','after','afterEffort'], ['score','sure','ms'], ['cached'], ['intents']);
+  return result;
+}
+function affinity(raw) {
+  const result = fields(raw, ['mode','why','last','at','leadModel'], ['turn','lastTurn','cacheRead','cacheWrite'], ['within','kept']);
+  if (result && object(raw.main)) result.main = fields(raw.main, ['id','kind','name','who']);
   return result;
 }
 function candidate(item) {
@@ -93,13 +98,13 @@ function route(raw) {
   // never enter the renderer or this plugin's storage.
   return {
     id: raw.id, prompt: prompt(raw.prompt), sessionKey: sessionKey(raw), time: text(raw.time), agent: text(raw.agent, 100), model: text(raw.model), provider: text(raw.provider),
-    ...fields(raw, ['fail','tier','pinned'], [], ['canceled']),
+    ...fields(raw, ['fail','tier','pinned','held'], [], ['canceled']),
     moved: fields(raw.moved, ['to','why']),
     effort: text(raw.effort), kind: text(raw.kind), done: raw.done === true, status: number(raw.status), error: text(raw.error),
     phase: text(raw.phase), served: text(raw.served), ms: number(raw.ms), tokens: number(raw.tokens), out: number(raw.out),
     ...fields(raw, [], ['masking','ttft','firstText','flow','firstReasoning','reasoning'], ['reasoningHidden']),
     usage: Array.isArray(raw.usage) ? raw.usage.slice(0,128).map(item=>fields(item, ['provider','model'], ['in','out','cache_read','cache_write','reasoning'], ['cache_unknown'])) : [],
-    affinity: fields(raw.affinity, ['mode','why','last','at','leadModel'], ['turn','lastTurn','cacheRead','cacheWrite'], ['within','kept']),
+    affinity: affinity(raw.affinity),
     group: raw.group ? {...fields(raw.group, ['name','routing','affinity','id','ref'], [], ['auto','sink'], ['members','via','fast']),
       subs: Array.isArray(raw.group.subs) ? raw.group.subs.filter(object).slice(0,128).map(s=>fields(s,['id','ref','name','routing','in'],['rules'])) : [],
       paused: Array.isArray(raw.group.paused) ? raw.group.paused.filter(object).slice(0,128).map(p=>fields(p,['member','group','folder'],['rule'],['byFolder'],['when'])) : []} : null,

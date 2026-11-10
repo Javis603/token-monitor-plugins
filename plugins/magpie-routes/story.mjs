@@ -26,7 +26,7 @@ export function maskText(text, route) {
   if (from < text.length) out.push(text.slice(from));
   return out;
 }
-function accountNames(route){return [...(route?.order||[]).map(w=>w.who),...(route?.tries||[]).map(tr=>tr.reset?.who)];}
+function accountNames(route){return [...(route?.order||[]).map(w=>w.who),...(route?.tries||[]).map(tr=>tr.reset?.who),...(route?.affinity?.main?.who?[route.affinity.main.who]:[])];}
 function official(route,masked){
  const names=accountNames(route),display=name=>name&&masked?marked(name,names.indexOf(name)):name;
  // usedPercent is the normalized DTO name; upstream wording consumes used.
