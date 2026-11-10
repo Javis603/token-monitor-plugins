@@ -77,6 +77,12 @@ app.whenReady().then(async () => {
     window.nextMagpie=${JSON.stringify(magpie)};
     nextMagpie.routes[0].prompt.tokens=24000;pushMagpie(nextMagpie);
     check('context-live-update',root.querySelector('.ctx-card').textContent.includes('24K'));
+    window.contextIconMeasurements={};
+    for(const [name,selector,expected] of [['agent','.ctx-who > .rr-brand',14],['model','.ctx-what > .rr-brand',12]]){
+      const rect=root.querySelector(selector).getBoundingClientRect();
+      contextIconMeasurements[name]={width:rect.width,height:rect.height};
+      check('context-'+name+'-icon-'+expected+'px ('+rect.width+'x'+rect.height+')',rect.width===expected&&rect.height===expected);
+    }
     const before=root.querySelector('.ctx-card');
     nextMagpie.routes[0].prompt=null;pushMagpie(nextMagpie);
     check('context-card-removed-without-prompt',!root.querySelector('.ctx-card'));
@@ -117,6 +123,7 @@ app.whenReady().then(async () => {
 
     check('magpie-page-uses-header-outlet',header.children.length>0);
   })()`);
+  fs.writeFileSync(path.join(evidence,'context-icon-measurements.json'),JSON.stringify(await win.webContents.executeJavaScript('contextIconMeasurements'),null,2)+'\n');
   win.webContents.focus();
   for (const keyCode of ['Enter','Space']) {
     if (keyCode==='Space') await win.webContents.executeJavaScript(`(()=>{document.querySelector('.rr-back-live').click();document.querySelector('.ctx-spark .hit').focus();})()`);

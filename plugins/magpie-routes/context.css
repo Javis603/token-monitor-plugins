@@ -21,8 +21,8 @@
 .rr-context .ctx-route, .rr-context .ctx-who, .rr-context .ctx-what { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .rr-context .ctx-route { gap: 6px; font-size: 12px; overflow: hidden; }
 .rr-context .ctx-who { flex: none; color: var(--fg-2); font-weight: 500; white-space: nowrap; }
-.rr-context .ctx-who .ic { width: 14px; height: 14px; translate: 0 .5px; }
-.rr-context .ctx-what .ic { flex: none; width: 12px; height: 12px; translate: 0 1px; }
+.rr-context .ctx-who > .rr-brand { width: 14px; height: 14px; translate: 0 .5px; }
+.rr-context .ctx-what > .rr-brand { flex: none; width: 12px; height: 12px; translate: 0 1px; }
 .rr-context .ctx-sep { flex: none; color: var(--faint); }
 .rr-context :where(.ctx-card.max420) :is(.ctx-who-n, .ctx-sep) { display: none; }
 .rr-context .ctx-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--code-font, var(--code)); font-size: 11px; color: var(--muted); }
