@@ -30,6 +30,26 @@
       },
       "versions": [
         {
+          "version": "0.1.1",
+          "changelog": {
+            "en": "Fix the blank DeepSeek Harness icon and source name. Sync routing explanations, context cards, agent marks and Chinese translations with Magpie 9c39edb9; preserve canceled-request status and fall back to a generic mark for unknown icons.",
+            "zh-CN": "修复 DeepSeek Harness 图标空白及来源名称。同步 Magpie 9c39edb9 的路由说明、上下文卡片、Agent 图标与中文翻译；保留请求取消状态，未知图标改用通用标记。",
+            "zh-TW": "修正 DeepSeek Harness 圖示空白及來源名稱。同步 Magpie 9c39edb9 的路由說明、上下文卡片、Agent 圖示與中文翻譯；保留請求取消狀態，未知圖示改用通用標記。",
+            "ko": "DeepSeek Harness의 빈 아이콘과 소스 이름을 수정했습니다. Magpie 9c39edb9의 라우팅 설명, 컨텍스트 카드, 에이전트 아이콘 및 중국어 번역을 동기화했습니다. 취소 상태를 유지하고 알 수 없는 아이콘은 일반 표시로 대체합니다.",
+            "ja": "DeepSeek Harness の空白アイコンとソース名を修正。Magpie 9c39edb9 のルーティング説明、コンテキストカード、エージェントアイコン、中国語訳を同期しました。キャンセル状態を保持し、不明なアイコンには汎用マークを表示します。",
+            "pt-BR": "Corrige o ícone em branco e o nome de origem do DeepSeek Harness. Sincroniza explicações de roteamento, cartões de contexto, ícones de agentes e traduções chinesas com o Magpie 9c39edb9. Preserva o estado de cancelamento e usa um símbolo genérico para ícones desconhecidos."
+          },
+          "engines": {
+            "tokenMonitor": ">=0.81.0"
+          },
+          "url": "https://raw.githubusercontent.com/Javis603/token-monitor-plugins/dist/magpie-routes-0.1.1.tmplugin",
+          "sha256": "f49c9489014d28057817c50dd3c69daca811b113581cf0b2ae4166ccdca61194",
+          "types": [
+            "widget",
+            "page"
+          ]
+        },
+        {
           "version": "0.1.0",
           "changelog": {
             "en": "Initial release: live Magpie routing, context summaries and recent requests in the main page, Notch and Edge Dock. Account masking is shared across views. Supports English, Traditional Chinese and Simplified Chinese.",
