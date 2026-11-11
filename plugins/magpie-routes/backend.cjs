@@ -1,8 +1,12 @@
 'use strict';
 const gateway = require('./gateway.cjs');
+const {createHistory}=require('./history.cjs');
+const path=require('node:path');
 
 exports.activate = async ({ host, publish }) => {
   let settings = await host.call('settings.get'), values = settings.values;
+  const lifetime=new AbortController();
+  const history=createHistory(path.join(gateway.configDirectory(),'routing'),lifetime.signal);
   let maskWrites = Promise.resolve();
   let disposed = false, generation = 0, controller, retryTimer, laneTimer;
   let routes = new Map(), seq = 0, pid = null;
@@ -89,15 +93,21 @@ exports.activate = async ({ host, publish }) => {
   }
   emit(); void start();
   return {
-    call(method) {
+    call(method,params) {
       if (method === 'toggleMask') return toggleMask();
       if (method === 'snapshot') return snapshot();
+      if (method === 'history') return history(params?.day??'');
+      if (method === 'cards') {
+        if(disposed)return [];
+        const signal=controller?.signal,port=gateway.detectPort(values.port);
+        return gateway.readJSON(port,'/v1/magpie/quotas/cards',signal,5000).then(gateway.cards);
+      }
       if (method === 'reconnect') { void start(); return snapshot(); }
       throw new Error('Unknown Magpie Routes operation');
     },
     update(context) {
       if (context.settings) applySettings(context.settings);
     },
-    dispose() { disposed = true; stop(); routes.clear(); }
+    dispose() { disposed = true;lifetime.abort(); stop(); routes.clear(); }
   };
 };

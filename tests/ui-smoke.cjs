@@ -64,7 +64,8 @@ app.whenReady().then(async () => {
     const root=document.getElementById('surface'),header=document.getElementById('header-actions');
     const css=${JSON.stringify(manifests['magpie-routes'].css)};for(const file of css){const link=document.createElement('link');link.rel='stylesheet';link.href='tm-plugin://magpie-routes/'+file;document.head.append(link)}
     const plugin=await import('tm-plugin://magpie-routes/ui.mjs');
-    const ctx={asset:name=>'tm-plugin://magpie-routes/'+name,backend:{call:async()=>(${JSON.stringify(magpie)}),subscribe:fn=>{window.pushMagpie=fn;return()=>{}}},app:{reportBubbleSize(){}}};
+    window.backendCalls=[];
+    const ctx={asset:name=>'tm-plugin://magpie-routes/'+name,backend:{call:async(method,params)=>{backendCalls.push(method);if(method==='history'){if(window.delayHistory)return new Promise(resolve=>window.resolveHistory=resolve);return structuredClone(window.historyFixtures?.[params?.day||'']||{days:[],routes:[],cut:false,tallies:[]});}if(method==='cards')return structuredClone(window.cardsFixture||[]);return (${JSON.stringify(magpie)});},subscribe:fn=>{window.pushMagpie=fn;return()=>{}}},app:{reportBubbleSize(){}}};
     window.magpie=await plugin.activate(ctx);
     let missing=false;try{magpie.mount(root,{surface:'page',visible:true})}catch(e){missing=/Token Monitor/.test(e.message)}
     check('missing-header-host-reports-clear-requirement',missing);
@@ -123,6 +124,169 @@ app.whenReady().then(async () => {
 
     check('magpie-page-uses-header-outlet',header.children.length>0);
   })()`);
+  await win.webContents.executeJavaScript(`(()=>{
+    const root=document.getElementById('surface');
+    window.stageRestore=structuredClone(sparkRestore);
+    const direct=structuredClone(stageRestore.routes[0]);
+    direct.id=10;direct.agent='t3code';direct.provider='codex';direct.model='codex/codex-auto-review';
+    direct.order=direct.order.map((w,i)=>({...w,kind:'account',name:'Codex',who:w.name,plan:i?'plus':'Pro Lite',model:'codex-auto-review',routing:'',known:true,usedPercent:i?100:54}));
+    direct.tries=[{id:direct.order[0].id,model:'codex-auto-review',done:false}];
+    direct.bytes=63400;direct.contentAt=Date.now()-1000;direct.estTok=1000;
+    const auto=structuredClone(direct);auto.id=11;auto.model='group/smart-split';auto.provider='group';
+    auto.group={id:'smart-split',name:'Auto',routing:'order',members:['codex/gpt-6.1-sol','commandcode/deepseek/deepseek-v4.1-flash']};
+    auto.order=auto.order.map(w=>({...w,model:'gpt-6.1-sol'}));
+    auto.order.push({...auto.order[0],id:'command-a',provider:'commandcode',name:'Command Code',icon:'commandcode',who:'demo-goat@example.test',model:'deepseek/deepseek-v4.1-flash'});
+    auto.tries=[{id:'command-a',model:'deepseek/deepseek-v4.1-flash',done:false}];
+    window.groupedFixture={...structuredClone(stageRestore),routes:[direct,auto]};
+    pushMagpie(groupedFixture);
+    check('stage-has-separate-route-headings',root.querySelectorAll('.rr-branch').length===2);
+    check('stage-heading-count-is-focused-route-only',root.querySelector('.rr-what').textContent.includes('2'));
+    check('stage-shows-two-line-account-details',[...root.querySelectorAll('.rr-seat')].every(n=>n.querySelector('.rr-seat-note').getBoundingClientRect().top>=n.querySelector('.rr-seat-name').getBoundingClientRect().bottom));
+    check('stage-shows-safe-live-counters',root.textContent.includes('61.9 KiB'));
+    check('stage-chinese-statuses-are-translated',[...root.querySelectorAll('.rr-seat-note')].every(n=>!/answering|used|ago|available/.test(n.textContent)));
+    check('stage-model-name-not-truncated',root.querySelectorAll('.rr-seat-name code')[4].scrollWidth<=root.querySelectorAll('.rr-seat-name code')[4].clientWidth+1);
+    const heading=root.querySelector('.rr-branch-toggle');
+    window.stableStageSeat=root.querySelector('.rr-seat');
+    heading.click();
+    check('stage-fold-preserves-other-route',root.querySelectorAll('.rr-seat').length===3&&heading.getAttribute('aria-expanded')==='false');
+    check('stage-fold-shows-active-summary',heading.textContent.includes('61.9 KiB'));
+    pushMagpie(structuredClone(groupedFixture));
+    check('stage-fold-survives-trace-updates',root.querySelectorAll('.rr-seat').length===3);
+    heading.click();
+    check('stage-unfold-retains-stable-seat-nodes',root.querySelector('.rr-seat')===stableStageSeat);
+    check('stage-account-names-remain-blurred',root.querySelectorAll('.rr-seat-name .rr-pii').length===5&&[...root.querySelectorAll('.rr-seat-name .rr-pii')].every(n=>getComputedStyle(n).filter.includes('blur')));
+    window.groupedHeading=heading;heading.focus();
+  })()`);
+  win.webContents.focus();
+  for(const keyCode of ['Enter','Space']) {
+    win.webContents.sendInputEvent({type:'keyDown',keyCode});win.webContents.sendInputEvent({type:'keyUp',keyCode});
+    await win.webContents.executeJavaScript(`new Promise(r=>setTimeout(r,30))`);
+    await win.webContents.executeJavaScript(`check('stage-fold-keyboard-${keyCode}',groupedHeading.getAttribute('aria-expanded')===${JSON.stringify(keyCode==='Space'?'true':'false')})`);
+  }
+  await win.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  await win.webContents.executeJavaScript(`(()=>{
+    const root=document.getElementById('surface');
+    const wires=[...root.querySelectorAll('.rr-wires path')];
+    check('stage-flight-paths-follow-branch-parents',wires.filter(p=>p.classList.contains('rr-flight-path')).length===5);
+    check('stage-wires-have-finite-lengths',wires.every(p=>Number.isFinite(p.getTotalLength())&&p.getTotalLength()>0));
+    const svg=root.querySelector('.rr-wires');
+    check('stage-wires-end-at-visible-branch-rows',[...root.querySelectorAll('.rr-seats > li')].every(row=>{
+      const path=wires.find(p=>p.dataset.target===row.dataset.node),end=path.getPointAtLength(path.getTotalLength()).matrixTransform(svg.getScreenCTM()),rect=row.getBoundingClientRect();
+      return Math.hypot(end.x-rect.left,end.y-rect.top-rect.height/2)<1;
+    }));
+  })()`);
+  await win.webContents.executeJavaScript('groupedHeading.blur()');
+  fs.writeFileSync(path.join(evidence,'page-grouped-fixture.png'),(await win.webContents.capturePage()).toPNG());
+  await win.setSize(520,900);
+  await win.webContents.executeJavaScript('new Promise(r=>setTimeout(r,150))');
+  await win.webContents.executeJavaScript(`(()=>{
+    const root=document.getElementById('surface');
+    check('stage-narrow-has-no-horizontal-overflow',root.scrollWidth<=root.clientWidth+1);
+    check('stage-narrow-retains-headings-and-seats',root.querySelectorAll('.rr-branch').length===2&&root.querySelectorAll('.rr-seat').length===5);
+  })()`);
+  fs.writeFileSync(path.join(evidence,'page-grouped-narrow.png'),(await win.webContents.capturePage()).toPNG());
+  win.setSize(900,900);
+  await win.webContents.executeJavaScript(`(()=>{
+    const pool=structuredClone(groupedFixture.routes[0]);pool.group={id:'pool',name:'Pool',members:[],subs:[{id:'nested',name:'Nested',routing:'order'}]};pool.order=Array.from({length:3},(_,i)=>({...pool.order[0],id:'key-'+i,kind:'key',who:'synthetic-key-'+i,via:['nested'],rank:i+1}));pool.tries=[];
+    pushMagpie({...groupedFixture,routes:[pool]});
+    const root=document.getElementById('surface'),branches=root.querySelectorAll('.rr-branch');
+    check('stage-nested-key-pool-starts-folded',branches.length===2&&root.querySelectorAll('.rr-seat').length===0&&branches[1].textContent.includes('3'));
+    branches[1].firstChild.click();check('stage-nested-key-pool-expands-in-place',root.querySelectorAll('.rr-seat').length===3);
+    branches[0].firstChild.click();check('stage-nested-group-folds-whole-subtree',root.querySelectorAll('.rr-branch').length===1&&root.querySelectorAll('.rr-seat').length===0);
+  })()`);
+  await win.webContents.executeJavaScript(`(async()=>{
+    const root=document.getElementById('surface'),template=structuredClone(sparkRestore.routes[0]),now=Date.now();
+    const row=(id,session,change={})=>({...structuredClone(template),id,time:new Date(now-(105-id)*30000).toISOString(),agent:'t3code',sessionKey:session,callerKey:'office-key-id',callerKeyName:'Office',kind:'',done:true,status:200,ms:6000,ttft:1000,flow:5000,out:1000,tokens:(105-id)*10000,tries:[{id:template.order[0].id,model:template.model,done:true,status:200,start:new Date(now-(105-id)*30000).toISOString(),ms:6000}],usage:[{in:20,out:1000,cache_read:60,cache_write:20,credits:1.5}],order:template.order.map(w=>({...w,kind:'account',name:'Codex',who:w.name,plan:'Plus',known:true})),...change});
+    window.readonlyRows=[row(105,'session-a',{done:false,tries:[{id:template.order[0].id,model:template.model,done:false}],usage:[],bytes:63400,estTok:1000,contentAt:now-1000}),row(104,'session-b',{callerKey:'automation-key-id',callerKeyName:'Automation',prompt:{...structuredClone(template.prompt),tokens:34000}}),row(103,'session-a',{kind:'thread_title_reconsideration'}),row(102,'session-a'),row(101,'session-old',{time:new Date(now-3600000).toISOString()})];
+    window.historyPast=readonlyRows.filter(r=>r.done).map((r,i)=>({...structuredClone(r),id:900+i,time:new Date(Date.UTC(2026,10,9,10,i)).toISOString()}));
+    const days=[{day:'2026-11-10',requests:12},{day:'2026-11-09',requests:4}];
+    window.historyFixtures={'':{days,routes:[],cut:false,tallies:[]},'2026-11-09':{days,routes:historyPast,cut:false,tallies:[]},'2026-11-10':{days,routes:historyPast,cut:false,tallies:[]}};
+    window.cardsFixture=template.order.map(w=>({kind:'subscription',provider:'codex',user:w.name,plan:'Plus',readAt:new Date(now-60000).toISOString(),windows:[{name:'Weekly',used:54,resetsAt:new Date(now+86400000).toISOString()},{name:'Wallet',balance:25,unit:'USD',runsOut:5,runsOutAt:new Date(now+3600000).toISOString()}]}));
+    window.readonlyFixture={...structuredClone(sparkRestore),routes:readonlyRows};pushMagpie(readonlyFixture);
+    root.querySelector('.rr-history-days button').click();await new Promise(r=>setTimeout(r,80));
+    root.querySelector('.rr-account-list button').click();await new Promise(r=>setTimeout(r,80));
+    check('concurrent-context-has-two-independent-session-blocks',root.querySelectorAll('.rr-context-session').length===2);
+    check('concurrent-context-hides-auxiliary-and-stale-sessions',root.querySelectorAll('.rr-context-session .ctx-stack').length===2);
+    check('concurrent-context-stacks-are-visible',[...root.querySelectorAll('.rr-context-session .ctx-stack')].every(n=>n.getBoundingClientRect().width>100&&n.getBoundingClientRect().height>=5));
+    root.querySelector('.rr-context-session[data-session="t3code session-b"]').click();check('concurrent-context-click-selects-session-latest',root.querySelector('.ctx-crumbs').textContent.includes('#104'));
+    document.querySelector('.rr-back-live').click();
+    check('requests-show-live-reply-counters',root.querySelector('.rr-request-live').textContent.includes('61.9 KiB'));
+    check('requests-show-metrics-and-reported-credits',root.querySelectorAll('.rr-request-detail [data-metric="cache"]').length>0&&root.querySelectorAll('.rr-request-detail [data-metric="cost"]').length>0);
+    check('accounts-show-allowance-windows-and-wallet-expiry',root.querySelector('.rr-account-list').textContent.includes('25 USD')&&root.querySelector('.rr-account-list').textContent.includes('5 USD'));
+    check('accounts-retain-mask-for-live-readings',[...root.querySelectorAll('.rr-account-summary > strong .rr-pii')].every(n=>getComputedStyle(n).filter.includes('blur')));
+    root.querySelector('[data-group-by="session"]').click();check('requests-group-by-session',root.querySelectorAll('.rr-request-group').length===3);
+    const sessionLabelsMatch=()=>[...root.querySelectorAll('.rr-context-session')].every(card=>{
+      const r=readonlyRows.find(r=>r.agent+' '+r.sessionKey===card.dataset.session);
+      let row=root.querySelector('.rr-request-detail[data-request-id="'+r.id+'"]');
+      while(row&&!row.matches('.rr-request-group'))row=row.previousElementSibling;
+      return row?.querySelector('strong').textContent===card.querySelector('strong').textContent;
+    });
+    check('context-session-labels-match-request-groups',sessionLabelsMatch());
+    const group=root.querySelector('.rr-request-group');group.focus();group.click();check('request-group-fold-keeps-focused-button',document.activeElement===group&&group.getAttribute('aria-expanded')==='false');group.click();
+    root.querySelector('[data-group-by="key"]').click();check('requests-group-by-nonsecret-key-name',root.querySelectorAll('.rr-request-group').length===2&&root.querySelector('.rr-history-list').textContent.includes('Automation'));
+    root.querySelector('[data-group-by="request"]').click();
+    root.querySelector('[data-purpose="kind:thread_title"]').click();check('purpose-filter-normalizes-upstream-kind-alias',root.querySelectorAll('.rr-request-detail').length===1);
+    root.querySelector('[data-purpose="conversation"]').click();check('purpose-filter-supports-multiple-selections',root.querySelectorAll('.rr-request-detail').length===5);
+    // Clear by toggling the selected purpose inputs, independent of locale.
+    for(const input of [...root.querySelectorAll('[data-purpose]')])if(input.checked)input.click();
+    const sorting=root.querySelector('.rr-history-tools select');sorting.value='tokens';sorting.dispatchEvent(new Event('change'));
+    check('requests-sort-by-numeric-tokens',root.querySelector('.rr-request-detail').dataset.requestId==='101');
+    const cache=root.querySelector('input[data-metric="cache"]');cache.click();check('request-metrics-visibility-toggle',root.querySelectorAll('.rr-request-detail [data-metric="cache"]').length===0);cache.click();
+    sorting.value='newest';sorting.dispatchEvent(new Event('change'));
+    root.querySelectorAll('.rr-history-days button')[2].click();await new Promise(r=>setTimeout(r,80));
+    check('history-day-loads-own-records',root.querySelectorAll('.rr-request-detail').length===4&&root.querySelector('.ctx-crumbs').textContent.includes('#903'));
+    check('history-day-hides-live-session-strip',root.querySelector('.rr-context-sessions').hidden);
+    const keptTitle=root.querySelector('.rr-request-detail').firstChild;pushMagpie(structuredClone(readonlyFixture));check('history-does-not-repaint-for-unrelated-live-updates',root.querySelector('.rr-request-detail').firstChild===keptTitle);
+    root.querySelector('[data-action="replay"]').click();await new Promise(r=>setTimeout(r,80));
+    check('replay-starts-with-control-bar',!root.querySelector('.rr-replay').hidden);
+    root.querySelector('.rr-replay [data-action="pause"]').click();
+    const seek=root.querySelector('.rr-replay input');seek.value=500;seek.dispatchEvent(new Event('input'));
+    const at=seek.value;await new Promise(r=>setTimeout(r,80));check('replay-pause-and-seek-hold-position',seek.value===at);
+    root.querySelector('.rr-replay [data-action="speed"]').click();check('replay-speed-control',root.querySelector('.rr-replay [data-action="speed"]').textContent.includes('2'));
+    root.querySelector('.rr-replay [data-action="stop"]').click();check('replay-stop-restores-history-scope',root.querySelector('.rr-replay').hidden&&root.querySelectorAll('.rr-request-detail').length===4);
+    document.querySelector('.rr-back-live').click();check('history-can-return-to-live',root.querySelectorAll('.rr-request-detail').length===5);
+    window.delayHistory=true;root.querySelectorAll('.rr-history-days button')[2].click();document.querySelector('.rr-back-live').click();window.delayHistory=false;resolveHistory(structuredClone(historyFixtures['2026-11-09']));await new Promise(r=>setTimeout(r,50));
+    check('late-history-response-cannot-replace-live-selection',root.querySelectorAll('.rr-request-detail').length===5);
+    check('page-never-calls-a-vendor-or-settings-write',backendCalls.every(method=>['snapshot','history','cards'].includes(method)));
+    root.querySelector('.rr-context:not(.rr-context-sessions)').scrollIntoView({block:'start'});await new Promise(r=>setTimeout(r,120));
+  })()`);
+  fs.writeFileSync(path.join(evidence,'page-context-sessions.png'),(await win.webContents.capturePage()).toPNG());
+  await win.webContents.executeJavaScript(`document.querySelector('.rr-requests').scrollIntoView({block:'start'})`);
+  await win.webContents.executeJavaScript('new Promise(r=>setTimeout(r,100))');
+  fs.writeFileSync(path.join(evidence,'page-request-history.png'),(await win.webContents.capturePage()).toPNG());
+  win.setSize(520,900);
+  await win.webContents.executeJavaScript(`new Promise(r=>setTimeout(r,150))`);
+  await win.webContents.executeJavaScript(`check('readonly-history-narrow-has-no-horizontal-overflow',document.getElementById('surface').scrollWidth<=document.getElementById('surface').clientWidth+1)`);
+  fs.writeFileSync(path.join(evidence,'page-request-history-narrow.png'),(await win.webContents.capturePage()).toPNG());
+  win.setSize(900,900);
+  const reviewProof=await win.webContents.executeJavaScript(`(async()=>{
+    const root=document.getElementById('surface'),template=structuredClone(readonlyRows[1]);
+    const row=(id,hour,tokens,model,tries)=>({...structuredClone(template),id,time:new Date(Date.UTC(2026,10,9,hour)).toISOString(),model,served:'',prompt:{...structuredClone(template.prompt),tokens},tries});
+    const attempt={id:template.order[0].id,model:template.model,done:true,status:200};
+    const failed={...attempt,status:429,fail:'rate'},rest={until:'2026-11-09T05:00:00.000Z',why:'rate'};
+    historyFixtures['2026-11-09'].routes=[row(7,1,6000,'older-request',[failed,attempt]),row(8,2,9000,'middle-request',[attempt]),row(7,3,12000,'newer-request',[{...failed,rest},{...failed,rest},attempt])];
+    root.querySelectorAll('.rr-history-days button')[2].click();await new Promise(r=>setTimeout(r,80));
+    const reroutes=root.querySelector('.rr-stats').children[1].querySelector('dd').textContent;
+    const older=[...root.querySelectorAll('.rr-request-detail')].find(row=>row.textContent.includes('older-request'));older.click();
+    const selected=[...root.querySelectorAll('.rr-request-detail[aria-pressed="true"]')];
+    const composite=selected.length===1&&selected[0]===older&&root.querySelector('.ctx-big')?.textContent.startsWith('6K');
+    const points=root.querySelectorAll('.ctx-spark .hit');points[points.length-1].dispatchEvent(new MouseEvent('click',{bubbles:true}));
+    const spark=Number(root.querySelectorAll('.rr-request-detail[aria-pressed="true"]').length)===1&&root.querySelector('.ctx-big')?.textContent.startsWith('12K')&&root.querySelectorAll('.ctx-spark .at').length===1;
+    // Drive between-event animation frames without relying on the display link.
+    const originalRAF=window.requestAnimationFrame,originalCancel=window.cancelAnimationFrame,frames=new Map();let frameId=0;
+    window.requestAnimationFrame=fn=>{frames.set(++frameId,fn);return frameId;};window.cancelAnimationFrame=id=>frames.delete(id);
+    root.querySelector('[data-action="replay"]').click();const start=performance.now();
+    for(let i=1;i<=8;i++){const batch=[...frames.values()];frames.clear();for(const fn of batch)fn(start+i*100);}
+    const replay=root.querySelector('.rr-replay'),position=Number(replay.querySelector('input').value);
+    const progress=!replay.hidden&&position>0&&position<1000;
+    replay.querySelector('[data-action="stop"]').click();document.querySelector('.rr-back-live').click();
+    window.requestAnimationFrame=originalRAF;window.cancelAnimationFrame=originalCancel;for(const fn of frames.values())originalRAF(fn);
+    return {history_composite_selection:composite,history_composite_spark:spark,scoped_reroutes_match_upstream_rest_events:reroutes==='2',incremental_replay_progress:progress,replay_position:position};
+  })()`);
+  console.log('Review regression proof:',JSON.stringify(reviewProof));
+  for(const[name,passed]of Object.entries(reviewProof))if(name!=='replay_position')await win.webContents.executeJavaScript('check('+JSON.stringify(name)+','+JSON.stringify(passed)+')');
+  await win.webContents.executeJavaScript(`(()=>{document.querySelector('.rr-back-live').click();pushMagpie(sparkRestore);scrollTo(0,0);})()`);
+  await win.webContents.executeJavaScript(`(()=>{pushMagpie(stageRestore);const history=structuredClone(stageRestore),earlier=structuredClone(history.routes[0]);earlier.id=0;earlier.prompt.tokens=6000;earlier.done=true;history.routes.push(earlier);pushMagpie(history);document.querySelector('.ctx-spark .hit').focus();})()`);
   fs.writeFileSync(path.join(evidence,'context-icon-measurements.json'),JSON.stringify(await win.webContents.executeJavaScript('contextIconMeasurements'),null,2)+'\n');
   win.webContents.focus();
   for (const keyCode of ['Enter','Space']) {

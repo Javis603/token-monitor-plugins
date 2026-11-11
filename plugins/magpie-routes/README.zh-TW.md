@@ -42,6 +42,8 @@
 
 帳號打碼僅影響顯示，metadata 可能包含工具名稱或檔案路徑。外掛以本機使用者權限執行。
 
+主頁亦提供多會話上下文、按請求／會話／金鑰分組、用途篩選及指標。歷史日瀏覽與重播讀取 Magpie 既有的本機路由資料夾，帳號用量視窗來自已儲存的用量卡片接口；不改寫歷史、不向供應商刷新用量，亦不修改帳號設定。會話使用匿名編號，不載入請求正文或由提示詞產生的標題。
+
 ## 授權與維護
 
 Token Monitor 社群整合，**並非 Magpie 官方產品**。部分程式與圖像改編自 [yetone/magpie](https://github.com/yetone/magpie)。原創程式採 [MIT](LICENSE)，上游來源與授權詳見 [SOURCE-NOTICE.md](SOURCE-NOTICE.md) 及 [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt)。

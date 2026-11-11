@@ -42,6 +42,8 @@ Token Monitor에서 로컬 Magpie의 실시간 라우팅, 컨텍스트 요약, �
 
 계정 가리기는 표시만 변경합니다. 메타데이터에는 도구 이름이나 파일 경로가 포함될 수 있습니다. 플러그인은 로컬 사용자 권한으로 실행됩니다.
 
+기본 페이지는 동시 세션 컨텍스트, 요청／세션／키별 그룹화, 용도 필터와 지표도 제공합니다. 날짜별 기록과 재생에는 Magpie의 기존 로컬 기록을, 사용량에는 저장된 카드 API를 읽습니다. 기록을 수정하거나 공급자에 사용량 갱신을 요청하거나 계정 설정을 변경하지 않습니다. 세션은 익명 번호로 표시하며 요청 본문이나 프롬프트에서 만든 제목은 읽지 않습니다.
+
 ## 라이선스 및 유지 관리
 
 Token Monitor 커뮤니티 통합이며 **Magpie 공식 제품이 아닙니다**. 일부 코드와 이미지는 [yetone/magpie](https://github.com/yetone/magpie)를 기반으로 합니다. 원본 코드는 [MIT](LICENSE)이며 업스트림 출처와 라이선스는 [SOURCE-NOTICE.md](SOURCE-NOTICE.md) 및 [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt)에 있습니다.

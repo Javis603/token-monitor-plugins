@@ -42,6 +42,8 @@ O plugin lê metadados locais de roteamento, concorrência e contexto do Magpie.
 
 A ocultação das contas afeta apenas a exibição. Os metadados podem conter nomes de ferramentas ou caminhos de arquivos. O plugin é executado com as permissões do usuário local.
 
+A página principal também oferece contexto por sessão, agrupamento por requisição/sessão/chave, filtros de finalidade e métricas. O histórico diário e a reprodução leem os arquivos locais existentes do Magpie; as cotas vêm da API de cartões já salvos. Essas leituras não reescrevem o histórico, não atualizam cotas junto aos fornecedores e não alteram contas. As sessões usam números anônimos, sem carregar corpos de requisições nem títulos derivados de prompts.
+
 ## Licença e manutenção
 
 Integração da comunidade Token Monitor, **não é um produto oficial do Magpie**. Parte do código e das imagens adapta [yetone/magpie](https://github.com/yetone/magpie). O código original usa [MIT](LICENSE); a atribuição e a licença upstream estão em [SOURCE-NOTICE.md](SOURCE-NOTICE.md) e [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt).

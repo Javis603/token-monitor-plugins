@@ -12,9 +12,9 @@ export function wireLayer(root, sources, hub, targets, finished) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const plays = new Map(), seen = new Set(), sourcePaths = new Map(), seatPaths = new Map();
   let value, frame = 0, layoutFrame = 0, disposed = false, bridge;
-  const allowed = () => value?.visible && value.follow && !value.reduced && !reduced.matches && value.data.connection === 'online';
+  const allowed = () => value?.visible && value.follow && !value.reduced && !reduced.matches && (value.replaying || value.data.connection === 'online');
   const routeNow = id => value.filtered.find(route => route.id === id);
-  const failed = attempt => attempt.status >= 400 || attempt.error || attempt.fail;
+  const failed = attempt => attempt.status >= 400 || attempt.fail;
   function bird() {
     const node = svg('g', { class: 'rr-flier' }); node.innerHTML = FLIER; sky.append(node); return node;
   }
@@ -129,14 +129,25 @@ export function wireLayer(root, sources, hub, targets, finished) {
       path.style.setProperty('--rr-agent', agentHue(node.dataset.agent));
       sourcePaths.set(node.dataset.agent,path);
     }
+    const branches = new Map();
     for (const node of targets()) {
-      const end = point(node,false), cls = node.dataset.tone === 'working' ? 'live' : node.dataset.selected === 'true' ? 'lit' : node.dataset.tone === 'resting' ? 'rest' : '';
-      // Dock wires turn into the list's left gutter. They never cross account
-      // names/meters as the horizontal Notch paths would at this narrow width.
-      const d = dock ? `M${right.x} ${right.y}C${right.x} ${right.y+14} ${end.x-12} ${right.y+14} ${end.x-12} ${right.y+28}L${end.x-12} ${end.y-6}Q${end.x-12} ${end.y} ${end.x} ${end.y}` : curve(right,end);
-      const path = addPath(d,cls);
-      path.style.setProperty('--rr-agent', node.style.getPropertyValue('--rr-agent') || agentHue());
-      seatPaths.set(node.dataset.seat,path);
+      const end = point(node,false), parent = branches.get(node.dataset.parent);
+      const cls = node.dataset.tone === 'working' ? 'live' : node.dataset.selected === 'true' ? 'lit' : node.dataset.tone === 'resting' ? 'rest' : '';
+      // Headers join the hub; descendants join their parent header in the
+      // left gutter. Flights use the complete path even with a branch folded.
+      const start = parent ? {x:parent.end.x+8,y:parent.end.y} : right;
+      const d = parent
+        ? `M${start.x} ${start.y}L${start.x} ${end.y-6}Q${start.x} ${end.y} ${end.x} ${end.y}`
+        : dock ? `M${right.x} ${right.y}C${right.x} ${right.y+14} ${end.x-12} ${right.y+14} ${end.x-12} ${right.y+28}L${end.x-12} ${end.y-6}Q${end.x-12} ${end.y} ${end.x} ${end.y}` : curve(right,end);
+      const edge = addPath(d,cls);
+      edge.dataset.target=node.dataset.node||node.dataset.seat;
+      edge.style.setProperty('--rr-agent', node.style.getPropertyValue('--rr-agent') || agentHue());
+      // Continue from the parent's endpoint rather than adding a disconnected
+      // subpath, so getPointAtLength never jumps between the two segments.
+      const full = parent ? parent.d + `L${start.x} ${start.y}` + d.slice(d.indexOf('L')) : d;
+      const path = parent ? addPath(full,'rr-flight-path') : edge;
+      branches.set(node.dataset.node,{d:full,end});
+      for(const key of node.rrSeats || [node.dataset.seat])if(key)seatPaths.set(key,path);
     }
     if (!allowed()) return;
     for (const route of value.staged) {
@@ -159,7 +170,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
   return {
     playing: () => new Set(plays.keys()),
     update(next) {
-      if (value && (value.data.processId !== next.data.processId || value.filter !== next.filter || value.follow !== next.follow)) { clear(); seen.clear(); }
+      if (value && (value.data.processId !== next.data.processId || value.filter !== next.filter || value.follow !== next.follow || value.replaying !== next.replaying || value.replayEpoch !== next.replayEpoch || (value.clock != null && next.clock < value.clock))) { clear(); seen.clear(); }
       value = next;
       const ids = new Set(next.filtered.map(route => route.id)); for (const id of seen) if (!ids.has(id)) seen.delete(id);
       for (const route of next.filtered) if (route.done && !plays.has(route.id)) seen.add(route.id);

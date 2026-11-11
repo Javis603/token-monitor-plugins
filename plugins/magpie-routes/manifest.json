@@ -6,7 +6,7 @@
     "zh-TW": "Magpie 路由",
     "zh-CN": "Magpie 路由"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": {
     "en": "Live Magpie routing, context and request details in the main App, Notch and Dock.",
     "zh-TW": "在主 App、Notch 與 Dock 查看 Magpie 即時路由、上下文及請求詳情。",
@@ -256,7 +256,10 @@
     "assets/openclaw.svg",
     "assets/openmausbot.svg",
     "assets/qwenpaw.svg",
-    "formats.mjs"
+    "formats.mjs",
+    "history.cjs",
+    "requests.mjs",
+    "replay.mjs"
   ],
   "views": [
     {

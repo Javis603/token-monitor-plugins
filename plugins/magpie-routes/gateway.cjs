@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { createHash } = require('node:crypto');
+const configDirectory=()=>path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'magpie');
 
 function detectPort(override) {
   if (override) return override;
-  const file = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'magpie', 'settings.json');
+  const file = path.join(configDirectory(),'settings.json');
   let config;
   try { config = JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (error) { if (error.code === 'ENOENT') return 3425; throw new Error('無法讀取 Magpie 設定，請在插件設定指定連接埠。'); }
@@ -73,7 +74,7 @@ function affinity(raw) {
 }
 function candidate(item) {
   return {
-    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset','expires','heldBy'],
+    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset','expires','heldBy','noURL'],
       ['rank','pace','fit','tokens','lateTtft','lateTps','window','capped','amount','limit','balance','unreached','reserve'], ['turn','held','barred','fallback','aside','known','free','learns','noCredits','credits','unlisted','fast','shared','weekLow','useFirst','creditsLast','heldOwn'], ['renews','via','soon']),
     usedPercent: number(item.used), rest: rest(item.rest),
     price: fields(item.price, [], ['input','output'], ['peak'])
@@ -98,12 +99,14 @@ function route(raw) {
   // never enter the renderer or this plugin's storage.
   return {
     id: raw.id, prompt: prompt(raw.prompt), sessionKey: sessionKey(raw), time: text(raw.time), agent: text(raw.agent, 100), model: text(raw.model), provider: text(raw.provider),
-    ...fields(raw, ['fail','tier','pinned','held'], [], ['canceled']),
+    ...fields(raw, ['fail','tier','pinned','held','callerKeyName'], ['cost','unpriced'], ['canceled','priced']),
+    callerKey:typeof raw.callerKey==='string'&&raw.callerKey?createHash('sha256').update('gateway-key\0'+raw.callerKey).digest('hex'):'',
+    sub:typeof raw.sub==='string'&&Boolean(raw.sub),
     moved: fields(raw.moved, ['to','why']),
     effort: text(raw.effort), kind: text(raw.kind), done: raw.done === true, status: number(raw.status), error: text(raw.error),
     phase: text(raw.phase), served: text(raw.served), ms: number(raw.ms), tokens: number(raw.tokens), out: number(raw.out),
-    ...fields(raw, [], ['masking','ttft','firstText','flow','firstReasoning','reasoning'], ['reasoningHidden']),
-    usage: Array.isArray(raw.usage) ? raw.usage.slice(0,128).map(item=>fields(item, ['provider','model'], ['in','out','cache_read','cache_write','reasoning'], ['cache_unknown'])) : [],
+    ...fields(raw, [], ['bytes','contentAt','estTok','masking','ttft','firstText','flow','firstReasoning','reasoning'], ['reasoningHidden']),
+    usage: Array.isArray(raw.usage) ? raw.usage.slice(0,128).map(item=>fields(item, ['provider','model'], ['in','out','cache_read','cache_write','reasoning','credits'], ['cache_unknown'])) : [],
     affinity: affinity(raw.affinity),
     group: raw.group ? {...fields(raw.group, ['name','routing','affinity','id','ref'], [], ['auto','sink'], ['members','via','fast']),
       subs: Array.isArray(raw.group.subs) ? raw.group.subs.filter(object).slice(0,128).map(s=>fields(s,['id','ref','name','routing','in'],['rules'])) : [],
@@ -137,4 +140,11 @@ function concurrency(raw) {
   return raw.active.slice(0, 256).map(item => ({ id: number(item.id), route: number(item.route), agent: text(item.agent),
     model: text(item.model), phase: text(item.phase), ms: number(item.ms) }));
 }
-module.exports = { detectPort, readJSON, trace, concurrency };
+function cards(raw) {
+  if(!object(raw)||!Array.isArray(raw.data))throw new Error('Invalid Magpie allowance cards.');
+  return raw.data.filter(object).slice(0,256).map(card=>({
+    ...fields(card,['provider','name','icon','plan','user','kind','balance','error','readAt','asOf','from'],[],['readDeferred']),
+    windows:Array.isArray(card.windows)?card.windows.filter(object).slice(0,64).map(w=>fields(w,['name','resetsAt','display','unit','runsOutAt','spentSince','family','pool'],['used','amount','limit','balance','runsOut','spent'],['unlimited','text','credits','capped'])):[]
+  }));
+}
+module.exports = { detectPort, readJSON, trace, route, concurrency, configDirectory, cards };

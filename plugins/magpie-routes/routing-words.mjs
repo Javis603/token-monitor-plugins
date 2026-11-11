@@ -1,13 +1,14 @@
 import {hitPct,fmtCost,countFormat} from './formats.mjs';
 import {t,locale} from './i18n.mjs';
 // Adapted from yetone/magpie 9c39edb92cab08eae43602f6a839baa4fc892b95 (MIT). See SOURCE-NOTICE.md.
-import {agentName,tried} from './model.mjs';
+import {agentName,tried,seatKey} from './model.mjs';
 import {took,timeSaid} from './timing.mjs';
 export const routingText=t;
 const now=()=>Date.now(),intlLang=locale,ctxShort=n=>n>=1000?Math.round(n/1000)+'k':String(n);
 // GUI-only custom scripts and account renames are unavailable on the gateway trace.
 const jsRoutings=()=>[];
-export function sourceWords(route,displayName){
+export function sourceWords(route,displayName,readClock=Date.now){
+ const now=readClock;
  const userShown=(_provider,name)=>displayName(name),whoShown=w=>displayName(w.who)||w.name||w.id;
 const atOf = new Map();
 
@@ -1077,5 +1078,68 @@ const balText = (w) => (countFormat.format(w.balance) + " " + t(w.unit || "")).t
 const TOKEN_OPS = { gte: "≥", gt: ">", lt: "<", lte: "≤" };
 
 const MESSAGE_OPS = { contains: "has the words", excludes: "doesn't have the words", starts: "starts with the words", matches: "matches the expression" };
- return {items:()=>items(route),outcome:()=>route.done&&route.tries.length?tryWhy(route,route.tries.length-1):affWhy(route,true)||ruleWhy(route,true)||firstWhy(route),description:mode=>t(modeOf(mode)[1]),rest:(rest,from)=>restWhen(rest,from),failure:failWord};
+  function behindWhy(r, w) {
+    const f = r.order[0], x = r.order.find((y) => y.id === w.id);
+    if (!f || !x || x === f || f.rest || f.fallback || x.fallback || x.routing || !x.known || group(x) !== "fine") return null;
+    if (!weighedWith(r, x).includes(f) || memberSplit(r, f, x)) return null;
+    if (["session", "turn", "cache"].includes(r.affinity?.why)) return "kept";
+    if (r.sealedTask || ruleWhy(r, true) || f.learns || !f.known || group(f) !== "fine" || f.useFirst && !x.useFirst) return null;
+    const { c, k, lapse } = cmpRenews(f, x);
+    return c >= 0 ? null : lapse || expiresAt(f, k) ? "expires" : "sooner";
+  }
+
+  function smartFor(r) {
+    for (const x of [r.rule, ...(r.nested || []).map((n) => n.rule)]) {
+      if (!x?.use || x.unready) continue;
+      for (const c of x.when || []) { const m = intentOf(c); if (m) return m; }
+    }
+    return "";
+  }
+
+  const unlistedWord = (w) => w.heldOwn ? t("another account is named for this model in {group}", { group: w.heldBy }) : w.heldBy ? t("not an account {group} may use", { group: w.heldBy }) : w.held ? t("not an account the gateway key may use") : w.noCredits ? t("held: its allowance used up, set not to spend credits") : w.capped ? t("held at its {cap}% usage cap", { cap: w.capped }) : w.barred ? t("set to serve other models, not {model}", { model: w.model }) : w.kind === "key" ? t("{name}'s list for this key has no {model}", { name: w.name, model: w.model }) : t("its plan doesn't list {model}", { model: w.model });
+
+// Upstream render()'s row words, with live counters from trace metadata.
+// GUI-owned quota direction and account windows are not read by this plugin.
+const tiered = w => !w.routing || w.routing === 'pace';
+const usedRenews = w => known0(w.usedRenews) ? at(w.usedRenews) : (w.renews||[]).length===1 ? renews(w)[0] : 0;
+const quota = (w,used,left,vars={}) => w.balance != null ? t(left,{n:balText(w),...vars})
+  : (w.limit>0 ? `${countFormat.format(w.amount)} / ${countFormat.format(w.limit)} ${t(w.unit||'')}`.trim()+' · ' : '')+t(used,{n:pct(w.used),...vars});
+function stageNote(w,state,currentId) {
+  const r=route,n=now(),smart=r.order[0]&&seatKey(w)===seatKey(r.order[0])&&smartFor(r),said=smart?t('picked for “{intent}”',{intent:smart}):'';
+  let s,b;
+  if(w.unlisted) s=unlistedWord(w);
+  else if(state.until) {const rest=state.rest||w.rest;s=failWord(rest.why||rest.kind,rest)+' · '+restWhen(rest);}
+  else if(w.window) s=t('request longer than its {n} window · passed over',{n:ctxShort(w.window)});
+  else if(state.tone==='working') {
+    const live=[];
+    if(r.id===currentId&&!r.done&&r.bytes){
+      live.push(r.bytes>=1048576?(r.bytes/1048576).toFixed(1)+' MiB':r.bytes>=1024?(r.bytes/1024).toFixed(1)+' KiB':Math.round(r.bytes)+' B');
+      if(r.estTok)live.push(t('≈ {n} tokens',{n:tokens(r.estTok)}));
+      if(r.contentAt)live.push(t('{d} ago',{d:dur(Math.max(0,n-r.contentAt))}));
+    }
+    const hushed=live.length&&r.contentAt&&n-r.contentAt>=15000;
+    s=hushed?live.join(' · '):t(r.id!==currentId?'answering another request…':'answering…')+(said?' · '+said:'')+(live.length?' · '+live.join(' · '):'');
+  }
+  else if(state.tone==='done'&&state.selected) s=t('answered this request')+(said?' · '+said:'');
+  else if(state.tone==='failed'||state.tone==='resting'||state.label===t('Canceled')) s=state.label;
+  else if(w.noURL) s=t('key set to {api} only, no {api} URL · sent on the others',{api:API[w.noURL]||w.noURL});
+  else if(w.reserve) s=t('in reserve · {n} at once',{n:w.reserve});
+  else if(said) s=said;
+  else if(w.free) s=t('free · costs nothing');
+  else if(w.known){
+    const soon=usedRenews(w);
+    s=w.creditsLast&&!r.order[0]?.creditsLast?quota(w,'{n} used · on credits · after the others','{n} left · on credits · after the others')
+      :tiered(w)&&group(w)==='spent'&&w.credits?quota(w,'{n} used · on credits','{n} left · on credits')
+      :tiered(w)&&group(w)==='spent'?quota(w,'{n} used · all but used up','{n} left · all but used up')
+      :tiered(w)&&group(w)==='low'?quota(w,'{n} used · kept for last','{n} left · kept for last')
+      :(b=behindWhy(r,w))==='kept'?quota(w,'{n} used · conversation kept on another','{n} left · conversation kept on another')
+      :b==='sooner'&&soon?quota(w,'{n} used · renews in {d} · one renewing sooner goes first','{n} left · renews in {d} · one renewing sooner goes first',{d:dur(soon-n)})
+      :b==='expires'&&soon?quota(w,'{n} used · renews in {d} · one whose credits expire sooner goes first','{n} left · renews in {d} · one whose credits expire sooner goes first',{d:dur(soon-n)})
+      :quota(w,'{n} used','{n} left');
+  }
+  else s=w.kind==='account'?t("what's left not known yet"):w.routing==='usage'?t('{n} tokens lately',{n:tokens(w.tokens||0)}):state.label;
+  if(!state.until&&!w.unlisted&&w.known&&!w.free){const soon=usedRenews(w),renew=soon>n?t('renews in {d}',{d:dur(soon-n)}):'';if(renew&&!s.includes(renew))s+=' · '+renew;}
+  return s;
+}
+ return {stageNote,modeName:mode=>t(modeOf(mode)[0]),items:()=>items(route),outcome:()=>route.done&&route.tries.length?tryWhy(route,route.tries.length-1):affWhy(route,true)||ruleWhy(route,true)||firstWhy(route),description:(mode,isGroup=false)=>t(isGroup&&mode==='order'?GROUP_ORDER:isGroup&&mode==='weight'?GROUP_WEIGHT:modeOf(mode)[1]),rest:(rest,from)=>restWhen(rest,from),failure:failWord};
 }

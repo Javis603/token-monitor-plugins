@@ -42,6 +42,8 @@ The plugin reads routing, concurrency and context metadata from local Magpie. It
 
 Account masking affects display only. Metadata may include tool names or file paths. The plugin runs with the local user’s permissions.
 
+The main page also shows concurrent-session context, request/session/key grouping, purpose filters and metrics. It reads Magpie’s existing local routing directory for retained-day browsing and replay, and its saved allowance-card API for account windows. These reads never rewrite history, refresh a vendor allowance or change account settings. Session labels use anonymous numbers; request bodies and prompt-derived titles stay excluded.
+
 ## License and maintenance
 
 A Token Monitor community integration, **not an official Magpie product**. Some code and artwork are adapted from [yetone/magpie](https://github.com/yetone/magpie). Original code uses [MIT](LICENSE); upstream attribution and license details are in [SOURCE-NOTICE.md](SOURCE-NOTICE.md) and [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt).
