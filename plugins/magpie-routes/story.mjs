@@ -31,10 +31,13 @@ function official(route,masked){
  const names=accountNames(route),display=name=>name&&masked?marked(name,names.indexOf(name)):name;
  // usedPercent is the normalized DTO name; upstream wording consumes used.
  const r={...route,order:route.order.map(w=>({...w,used:w.usedPercent})),left:(route.left||[]).map(w=>({...w,used:w.usedPercent}))};
- return sourceWords(r,display);
+ return sourceWords(r,display,()=>route.replayAt??Date.now());
 }
 export function storyItems(route,masked){return route?official(route,masked).items().filter(([text])=>text):[];}
 export function routeStory(route,masked){return storyItems(route,masked).filter(([,cls])=>cls!=='aside time').map(([text])=>text);}
 export function routeOutcome(route,masked){return route?official(route,masked).outcome():'';}
-export function routingDescription(mode){return sourceWords(null,name=>name).description(mode);}
+export function routingDescription(mode,isGroup=false){return sourceWords(null,name=>name).description(mode,isGroup);}
 export function restNote(rest,from){const words=sourceWords(null,name=>name);return words.failure(rest.why||rest.kind)+' · '+words.rest(rest,from);}
+
+export function seatNote(candidate,route,state,currentId){return official(route,false).stageNote({...candidate,used:candidate.usedPercent},state,currentId);}
+export const sourceModeName = mode => sourceWords(null,name=>name).modeName(mode);

@@ -6,7 +6,7 @@
     "zh-TW": "Magpie 路由",
     "zh-CN": "Magpie 路由"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": {
     "en": "Live Magpie routing, context and request details in the main App, Notch and Dock.",
     "zh-TW": "在主 App、Notch 與 Dock 查看 Magpie 即時路由、上下文及請求詳情。",
@@ -256,7 +256,10 @@
     "assets/openclaw.svg",
     "assets/openmausbot.svg",
     "assets/qwenpaw.svg",
-    "formats.mjs"
+    "formats.mjs",
+    "history.cjs",
+    "requests.mjs",
+    "replay.mjs"
   ],
   "views": [
     {
@@ -298,6 +301,22 @@
         "integer": true,
         "min": 0,
         "max": 65535
+      },
+      {
+        "id": "dataDirectory",
+        "type": "string",
+        "label": {
+          "en": "Magpie data directory",
+          "zh-TW": "Magpie 資料目錄",
+          "zh-CN": "Magpie 数据目录"
+        },
+        "description": {
+          "en": "Optional absolute path to Magpie’s data directory, containing settings.json and routing/. For portable Magpie, select its data folder. Empty uses the standard config location.",
+          "zh-TW": "可選，填寫 Magpie 資料目錄的絕對路徑，內含 settings.json 及 routing/。可攜版請填 data 資料夾；留空使用標準設定位置。",
+          "zh-CN": "可选，填写 Magpie 数据目录的绝对路径，内含 settings.json 和 routing/。便携版请填 data 文件夹；留空使用标准设置位置。"
+        },
+        "default": "",
+        "maxLength": 4096
       },
       {
         "id": "maskAccounts",

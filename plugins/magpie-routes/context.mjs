@@ -2,13 +2,13 @@ import {hitPct} from './formats.mjs';
 import {l, locale} from './i18n.mjs';
 // Context card ported from yetone/magpie 9c39edb9, MIT. See SOURCE-NOTICE.md.
 import { el, brand, svg as elementSVG } from './graphics.mjs';
-import { agentName } from './model.mjs';
+import { agentName, requestKey } from './model.mjs';
 import { contextText as t } from './context-i18n.mjs';
 
 export function contextSeries(route, routes) {
   if (!route?.sessionKey || route.kind) return null;
   return routes.filter(row => row.prompt && !row.kind && row.agent === route.agent && row.sessionKey === route.sessionKey)
-    .sort((a,b) => a.id-b.id).map(row => ({id:row.id,tokens:row.prompt.tokens,window:row.prompt.window,time:row.time}));
+    .sort((a,b) => Date.parse(a.time)-Date.parse(b.time)||a.id-b.id).map(row => ({id:row.id,tokens:row.prompt.tokens,window:row.prompt.window,time:row.time}));
 }
 
 export function createContextView(actions, ctx) {
@@ -203,7 +203,7 @@ function stackBar(p) {
       ns("polyline", { points: pts.join(" "), class: "line" });
     }
     series.forEach((p, i) => {
-      const on = p.id === at;
+      const on = requestKey(p) === at;
       // the marker is a dot over the stretched svg, so it stays round
       if (on) {
         const dot = el("span", "at");
@@ -963,7 +963,7 @@ function stackBar(p) {
       let sp = null;
       if (opts.series && opts.series.length > 1) {
         sp = el("div", "ctx-session");
-        sp.append(el("span", "ctx-k", t("This session")), spark(opts.series, r.id, window, opts.onPoint),
+        sp.append(el("span", "ctx-k", t("This session")), spark(opts.series, requestKey(r), window, opts.onPoint),
           el("span", "ctx-sub", count(opts.series.length, "1 request", "{n} requests")));
       }
 
@@ -1010,7 +1010,7 @@ function stackBar(p) {
       if (!route?.prompt) { card?.ctxDispose(); card = null; }
       return;
     }
-    const opts={place:'page',foldable:true,still:calm(),series:contextSeries(route,value.filtered),onPoint:p=>actions.pick(p.id),
+    const opts={place:'page',foldable:true,still:calm(),series:contextSeries(route,value.filtered),onPoint:p=>actions.pick(p),
       crumbs:[agentName(route.agent),`#${route.id}`]};
     if (!card) { card=ctxCard(route,opts); node.append(card); } else card.ctxUpdate(route,opts);
     const session=card.querySelector('.ctx-session');

@@ -4,6 +4,18 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import { stagedRoutes, maskName } from '../plugins/magpie-routes/model.mjs';
 const require = createRequire(import.meta.url), gateway = require('../plugins/magpie-routes/gateway.cjs');
+test('agent colours follow the upstream palette and keep visible agents distinct',async()=>{
+  const {createAgentColors}=await import('../plugins/magpie-routes/model.mjs');
+  const colours=createAgentColors(),ids=['claude','codex','gemini','t3code'];colours.hues(ids);
+  assert.deepEqual(ids.map(id=>colours.hueOf(id)),['#d97757','#858ad7','#2e9fc9','#5e95d7']);
+  const clash=createAgentColors();clash.hues(['gemini','deveco']);assert.notEqual(clash.hueOf('gemini'),clash.hueOf('deveco'));
+  const before=clash.hueOf('deveco');clash.hues(['deveco','gemini']);assert.equal(clash.hueOf('deveco'),before);
+  const crowded=createAgentColors(),many=Array.from({length:13},(_,i)=>'fixture-agent-'+i);crowded.hues(many);
+  const seen=new Map();let pair;
+  for(const id of many){const hue=crowded.hueOf(id);if(seen.has(hue)){pair=[seen.get(hue),id];break;}seen.set(hue,id);}
+  assert.ok(pair);crowded.hues(pair);assert.notEqual(crowded.hueOf(pair[0]),crowded.hueOf(pair[1]));
+  assert.equal(createAgentColors().hueOf('t3code'),'#5e95d7');
+});
 test('trace projection retains display metadata but excludes raw session and body data', () => {
   const row = { id: 1, agent: 'codex', session: 'private-session-fixture', body: 'private-body-fixture', request: { body: 'private-body-fixture' },
     order: [], tries: [], prompt: { tokens: 100, parts: [{ kind: 'files', tokens: 40, items: [{ name: 'fixture.txt', tokens: 40, body: 'private-body-fixture' }] }] } };
@@ -159,4 +171,89 @@ test('strict fallback and held-report hints use display metadata without exposin
   t.after(()=>{globalThis.document=previous;});
   const names = maskText(masked,row).filter(part=>typeof part!=='string');
   assert.ok(names.some(part=>part.className==='rr-pii'&&part.textContent===main.who));
+});
+
+test('stage follows upstream member order, latest account sets and nested fold defaults', async () => {
+  const {stageSeats,stageTree}=await import('../plugins/magpie-routes/model.mjs');
+  const make=(id,provider,model,extra={})=>({id,provider,model,name:provider,kind:'account',rank:1,...extra});
+  const a=make('a','z-provider','first'),b=make('b','a-provider','second');
+  const group={id:'g',name:'Auto',members:['z-provider/first','a-provider/second'],subs:[{id:'nested',name:'Nested',routing:'order'}]};
+  const route={id:1,group,provider:'group',model:'group/g',order:[b,a],tries:[],left:[]};
+  assert.deepEqual(stageSeats([route]).map(e=>e.key),[a,b].map(w=>w.id+'\0'+w.model));
+  assert.ok(stageSeats([route,{...route,id:2}]).every(e=>e.route.id===2));
+  const pool=Array.from({length:3},(_,i)=>make('p'+i,'codex','gpt',{via:['nested'],rank:i+1}));
+  const entries=stageSeats([{...route,order:pool}]);
+  const tree=stageTree(entries);
+  assert.equal(tree[0].name,'Nested');assert.equal(tree[0].open,true);
+  assert.equal(tree[1].type,'header');assert.equal(tree[1].open,true);
+  assert.equal(tree[2].depth,2);assert.equal(tree[2].parent,tree[1].key);
+  const folded=stageTree(entries,new Map([[tree[0].persistKey,false]]));
+  assert.equal(folded.length,1);assert.equal(folded[0].seats.length,3);
+  const keys=stageTree(stageSeats([{...route,group:null,order:pool.map(w=>({...w,via:[],kind:'key'}))}]));
+  assert.equal(keys.length,1);assert.equal(keys[0].open,false);
+  const long=stageTree(stageSeats([{...route,group:null,order:Array.from({length:6},(_,i)=>make('p'+i,'codex','gpt'))}]));
+  assert.equal(long.length,1);assert.equal(long[0].open,false);
+});
+
+test('simultaneous routes retain separate route headings and only held-out seats join the stage', async () => {
+  const {stageSeats,stageTree}=await import('../plugins/magpie-routes/model.mjs');
+  const a={id:'a',kind:'account',provider:'codex',name:'Codex',model:'review',rank:1};
+  const b={id:'b',kind:'account',provider:'deepseek',name:'DeepSeek',model:'chat',routing:'order',rank:1};
+  const direct={id:1,provider:'codex',model:'codex/review',order:[a],tries:[],left:[]};
+  const group={id:2,provider:'group',model:'group/auto',group:{id:'auto',name:'Auto',routing:'',members:['deepseek/chat']},order:[b],tries:[],left:[{...b,id:'c',capped:1},{...b,id:'d',held:true,capped:1}]};
+  const entries=stageSeats([direct,group]),tree=stageTree(entries);
+  assert.deepEqual(tree.filter(n=>n.type==='header').map(n=>n.name),['Codex','Auto']);
+  assert.equal(entries.length,3);assert.equal(tree.find(n=>n.key==='b\0chat').depth,1);
+  assert.equal(tree[0].seats[0].candidate.id,'a');
+  assert.equal(tree.find(n=>n.name==='Auto').seats.length,2);
+  assert.equal(tree.find(n=>n.name==='Auto').mode,'');
+});
+
+test('shared seats keep their first route owner and latest account metadata',async()=>{
+  const {stageSeats,stageTree}=await import('../plugins/magpie-routes/model.mjs');
+  const seat=id=>({id,kind:'account',provider:'codex',name:'Codex',model:'gpt-5',who:id});
+  const a={id:1,group:{id:'a',name:'Team A'},order:['x','y'].map(seat),tries:[]};
+  const b={id:2,group:{id:'b',name:'Team B'},order:['x','z'].map(seat),tries:[]};
+  b.order[0].usedPercent=73;
+  const entries=stageSeats([a,b]);
+  assert.deepEqual(entries.map(e=>[e.candidate.id,e.route.group.id]),[['x','a'],['y','a'],['z','b']]);
+  assert.equal(entries[0].candidate.usedPercent,73);
+  assert.deepEqual(stageTree(entries).filter(n=>n.depth===0).map(n=>[n.name,n.seats.map(e=>e.candidate.id)]),[['Team A',['x','y']],['Team B',['z']]]);
+  assert.deepEqual(stageSeats([b,a]).map(e=>[e.candidate.id,e.route.group.id]),[['x','b'],['z','b'],['y','a']]);
+});
+
+test('stage row words consume safe live counters, intent, wallet and restriction metadata', async () => {
+  const {seatNote}=await import('../plugins/magpie-routes/story.mjs');
+  const {candidateState}=await import('../plugins/magpie-routes/model.mjs');
+  const base={id:1,agent:'dsh',time:new Date().toISOString(),bytes:63400,estTok:1000,contentAt:Date.now()-1000,
+    body:'secret',order:[{id:'a',kind:'account',provider:'codex',model:'m',known:true,used:100,usedRenews:new Date(Date.now()+86400000).toISOString()}],tries:[{id:'a',model:'m',done:false}],rule:{use:'codex/m',when:['intent "quick task"']}};
+  function note(change={},candidate={},currentId=1){
+    const raw={...base,...change,order:[{...base.order[0],...candidate}]};
+    const r=gateway.trace({object:'trace',pid:1,seq:1,ids:[1],routes:[raw],totals:{}}).routes[0];
+    assert.equal(JSON.stringify(r).includes('secret'),false);
+    return seatNote(r.order[0],r,candidateState(r.order[0],r),currentId);
+  }
+  assert.match(note(),/61.9 KiB/);assert.match(note(),/≈ 1.0k tokens/);assert.match(note(),/quick task/);assert.match(note(),/renews in/);
+  assert.match(note({}, {}, 2),/answering another request/);assert.doesNotMatch(note({}, {}, 2),/KiB/);
+  assert.doesNotMatch(note({contentAt:Date.now()-20000}),/answering…/);
+  assert.match(note({tries:[],rule:null},{reserve:2}),/in reserve/);
+  assert.match(note({tries:[],rule:null},{free:true}),/free · costs nothing/);
+  assert.match(note({tries:[],rule:null},{balance:25,unit:'USD'}),/25 USD left/);
+  assert.match(note({tries:[],rule:null},{unlisted:true,heldBy:'Only group'}),/not an account Only group may use/);
+  assert.match(note({tries:[],rule:null},{noURL:'responses'}),/no OpenAI Responses URL/);
+  assert.match(note({tries:[],rule:null}),/all but used up/);
+});
+
+test('account pools fold independently across routing groups and nested paths',async()=>{
+  const {stageSeats,stageTree}=await import('../plugins/magpie-routes/model.mjs');
+  for(const nested of [false,true]){
+    const routes=['A','B'].map((group,i)=>({id:i+1,provider:'group',model:'group/'+group,group:{id:group,name:'Team '+group,subs:[{id:'nested-'+group,name:'Nested '+group}]},order:Array.from({length:3},(_,n)=>({id:group+n,kind:'account',provider:'codex',model:'gpt-5',via:nested?['nested-'+group]:[]}))}));
+    const entries=stageSeats(routes),initial=stageTree(entries),pools=initial.filter(n=>n.poolKind);
+    assert.equal(pools.length,2);assert.notEqual(pools[0].persistKey,pools[1].persistKey);assert.deepEqual(pools.map(p=>p.open),[true,true]);
+    const expanded=new Map([[pools[0].persistKey,false]]),folded=stageTree(entries,expanded);
+    assert.deepEqual(folded.filter(n=>n.poolKind).map(p=>p.open),[false,true]);assert.equal(folded.filter(n=>n.type==='seat').length,3);
+    assert.deepEqual(stageTree(stageSeats(structuredClone(routes)),expanded).filter(n=>n.poolKind).map(p=>p.open),[false,true]);
+    expanded.set(pools[1].persistKey,false);expanded.set(pools[0].persistKey,true);
+    assert.deepEqual(stageTree(entries,expanded).filter(n=>n.poolKind).map(p=>p.open),[true,false]);
+  }
 });

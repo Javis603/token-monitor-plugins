@@ -1,20 +1,20 @@
 import { svg } from './graphics.mjs';
 import { FLIER } from './flier.mjs';
-import { agentHue, seatKey, tried } from './model.mjs';
+import { createAgentColors, seatKey, tried, requestKey } from './model.mjs';
 
 // Magpie play/fly/pose/home, adapted to keyed Token Monitor surface nodes.
 // The original artwork, constant-distance flight, return flip, ±24° tilt,
 // timings and request/hold/reply/failover choreography are retained. MIT.
-export function wireLayer(root, sources, hub, targets, finished) {
+export function wireLayer(root, sources, hub, targets, finished, agentHue=createAgentColors().hueOf) {
   const wires = svg('svg', { class: 'rr-wires', 'aria-hidden': 'true' });
   const sky = svg('svg', { class: 'rr-sky', 'aria-hidden': 'true' });
   root.prepend(wires); root.append(sky);
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const plays = new Map(), seen = new Set(), sourcePaths = new Map(), seatPaths = new Map();
-  let value, frame = 0, layoutFrame = 0, disposed = false, bridge;
-  const allowed = () => value?.visible && value.follow && !value.reduced && !reduced.matches && value.data.connection === 'online';
-  const routeNow = id => value.filtered.find(route => route.id === id);
-  const failed = attempt => attempt.status >= 400 || attempt.error || attempt.fail;
+  let value, frame = 0, layoutFrame = 0, disposed = false, bridge, pausedAt = null;
+  const allowed = () => value?.visible && value.follow && !value.reduced && !reduced.matches && (value.replaying || value.data.connection === 'online');
+  const routeNow = key => value.filtered.find(route => requestKey(route) === key);
+  const failed = attempt => attempt.status >= 400 || attempt.fail;
   function bird() {
     const node = svg('g', { class: 'rr-flier' }); node.innerHTML = FLIER; sky.append(node); return node;
   }
@@ -25,10 +25,11 @@ export function wireLayer(root, sources, hub, targets, finished) {
   }
   function clear() {
     cancelAnimationFrame(frame); frame = 0;
+    for(const animation of sky.getAnimations({subtree:true}))animation.cancel();
     plays.clear(); sky.replaceChildren();
   }
   function finish(play) {
-    away(play); play.dot.remove(); plays.delete(play.id); seen.add(play.id);
+    away(play); play.dot.remove(); plays.delete(play.key); seen.add(play.key);
     queueMicrotask(() => { if (!disposed) finished(); });
   }
   function legsFor(play) {
@@ -67,7 +68,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
     play.bird.setAttribute('transform', `translate(${p.x} ${p.y}) scale(${flip ? -scale : scale} ${scale}) rotate(${play.angle})`);
   }
   function start(play, phase, ms) {
-    play.phase = phase; play.started = performance.now(); play.ms = ms;
+    play.phase = phase; play.started = pausedAt??performance.now(); play.ms = ms;
     play.dot.classList.toggle('held', phase === 'held' || phase === 'hub');
     play.dot.dataset.phase = phase;
     if (ms && !play.bird) play.bird = bird();
@@ -78,7 +79,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
     play.dot.classList.remove('back', 'err'); start(play, 'outbound', fromHub ? 900 : 1400);
   }
   function advance(play) {
-    const route = routeNow(play.id);
+    const route = routeNow(play.key);
     if (!route) { finish(play); return; }
     if (play.phase === 'inbound') { away(play); start(play, 'hub', 0); }
     else if (play.phase === 'outbound') { away(play); start(play, 'held', 0); }
@@ -98,13 +99,14 @@ export function wireLayer(root, sources, hub, targets, finished) {
   }
   function tick(now) {
     frame = 0;
+    if(pausedAt!==null)return;
     for (const play of [...plays.values()]) if (play.ms) {
       const progress = Math.min(1, (now - play.started) / play.ms); pose(play, progress);
       if (progress === 1) { play.ms = 0; advance(play); }
     }
     kick();
   }
-  function kick() { if (!frame && allowed() && [...plays.values()].some(play => play.ms)) frame = requestAnimationFrame(tick); }
+  function kick() { if (!frame && pausedAt===null && allowed() && [...plays.values()].some(play => play.ms)) frame = requestAnimationFrame(tick); }
   function draw() {
     layoutFrame = 0; if (disposed || !value?.visible) return;
     const width = root.clientWidth, height = root.clientHeight; if (!width || !height) return;
@@ -129,25 +131,38 @@ export function wireLayer(root, sources, hub, targets, finished) {
       path.style.setProperty('--rr-agent', agentHue(node.dataset.agent));
       sourcePaths.set(node.dataset.agent,path);
     }
+    const branches = new Map();
     for (const node of targets()) {
-      const end = point(node,false), cls = node.dataset.tone === 'working' ? 'live' : node.dataset.selected === 'true' ? 'lit' : node.dataset.tone === 'resting' ? 'rest' : '';
-      // Dock wires turn into the list's left gutter. They never cross account
-      // names/meters as the horizontal Notch paths would at this narrow width.
-      const d = dock ? `M${right.x} ${right.y}C${right.x} ${right.y+14} ${end.x-12} ${right.y+14} ${end.x-12} ${right.y+28}L${end.x-12} ${end.y-6}Q${end.x-12} ${end.y} ${end.x} ${end.y}` : curve(right,end);
-      const path = addPath(d,cls);
-      path.style.setProperty('--rr-agent', node.style.getPropertyValue('--rr-agent') || agentHue());
-      seatPaths.set(node.dataset.seat,path);
+      const end = point(node,false), parent = branches.get(node.dataset.parent);
+      const cls = node.dataset.tone === 'working' ? 'live' : node.dataset.selected === 'true' ? 'lit' : node.dataset.tone === 'resting' ? 'rest' : '';
+      // Headers join the hub; descendants join their parent header in the
+      // left gutter. Flights use the complete path even with a branch folded.
+      const start = parent ? {x:parent.end.x+8,y:parent.end.y} : right;
+      const d = parent
+        ? `M${start.x} ${start.y}L${start.x} ${end.y-6}Q${start.x} ${end.y} ${end.x} ${end.y}`
+        : dock ? `M${right.x} ${right.y}C${right.x} ${right.y+14} ${end.x-12} ${right.y+14} ${end.x-12} ${right.y+28}L${end.x-12} ${end.y-6}Q${end.x-12} ${end.y} ${end.x} ${end.y}` : curve(right,end);
+      const edge = addPath(d,cls);
+      edge.dataset.target=node.dataset.node||node.dataset.seat;
+      const hue=node.style.getPropertyValue('--rr-agent');if(hue)edge.style.setProperty('--rr-agent',hue);
+      // Continue from the parent's endpoint rather than adding a disconnected
+      // subpath, so getPointAtLength never jumps between the two segments.
+      const full = parent ? parent.d + `L${start.x} ${start.y}` + d.slice(d.indexOf('L')) : d;
+      const path = parent ? addPath(full,'rr-flight-path') : edge;
+      branches.set(node.dataset.node,{d:full,end});
+      for(const key of node.rrSeats || [node.dataset.seat])if(key)seatPaths.set(key,path);
     }
     if (!allowed()) return;
     for (const route of value.staged) {
-      if (route.done || seen.has(route.id) || plays.has(route.id) || !sourcePaths.has(route.agent)) continue;
+      const key=requestKey(route);
+      if (route.done || seen.has(key) || plays.has(key) || !sourcePaths.has(route.agent)) continue;
       const dot = svg('circle',{r:root.classList.contains('rr-stage-small') ? 3 : 4.5,class:'rr-packet'});
       dot.style.setProperty('--rr-agent', agentHue(route.agent)); sky.append(dot);
-      const play = {id:route.id,agent:route.agent,index:0,dot,bird:null}; plays.set(route.id,play);
+      const play = {key,agent:route.agent,index:0,dot,bird:null}; plays.set(key,play);
       if (route.tries.length) outbound(play,route,false); else start(play,'inbound',620);
     }
     for (const play of [...plays.values()]) {
-      if (!play.ms) { pose(play,1); advance(play); }
+      play.dot.style.setProperty('--rr-agent',agentHue(play.agent));
+      if (!play.ms) { pose(play,1); if(pausedAt===null)advance(play); }
     }
     kick();
   }
@@ -159,10 +174,22 @@ export function wireLayer(root, sources, hub, targets, finished) {
   return {
     playing: () => new Set(plays.keys()),
     update(next) {
-      if (value && (value.data.processId !== next.data.processId || value.filter !== next.filter || value.follow !== next.follow)) { clear(); seen.clear(); }
+      if (value && (value.data.processId !== next.data.processId || value.filter !== next.filter || value.follow !== next.follow || value.replaying !== next.replaying || value.replayEpoch !== next.replayEpoch || (value.clock != null && next.clock < value.clock))) { clear(); seen.clear(); }
       value = next;
-      const ids = new Set(next.filtered.map(route => route.id)); for (const id of seen) if (!ids.has(id)) seen.delete(id);
-      for (const route of next.filtered) if (route.done && !plays.has(route.id)) seen.add(route.id);
+      const paused=next.replay?.paused===true,now=performance.now();
+      if(paused&&pausedAt===null){pausedAt=now;cancelAnimationFrame(frame);frame=0;}
+      else if(!paused&&pausedAt!==null){
+        // Exclude the pause from each flight's elapsed wall-clock time.
+        for(const play of plays.values())if(play.ms)play.started+=now-pausedAt;
+        pausedAt=null;
+      }
+      root.classList.toggle('rr-replay-paused',paused);
+      for(const animation of sky.getAnimations({subtree:true})){
+        if(paused&&animation.playState==='running')animation.pause();
+        else if(!paused&&animation.playState==='paused')animation.play();
+      }
+      const ids = new Set(next.filtered.map(requestKey)); for (const id of seen) if (!ids.has(id)) seen.delete(id);
+      for (const route of next.filtered) if (route.done && !plays.has(requestKey(route))) seen.add(requestKey(route));
       root.classList.toggle('rr-paused',!allowed()); if (!allowed()) clear(); schedule();
     },
     dispose() { disposed = true; clear(); cancelAnimationFrame(layoutFrame); observer.disconnect(); root.removeEventListener('scroll',scroll,true); reduced.removeEventListener('change',motionChanged); }
