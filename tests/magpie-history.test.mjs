@@ -125,3 +125,49 @@ test('request sorting computes each metric once and preserves unknowns, zeros an
   assert.deepEqual(rows.map(r=>r.id),[1,2,3,4]);
   assert.deepEqual(sortRequests(rows,'newest').map(r=>r.id),[4,3,2,1]);assert.deepEqual(sortRequests(rows,'oldest').map(r=>r.id),[1,2,3,4]);
 });
+
+test('background polling waits for host visibility, aborts when hidden and catches up on resume',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const original=gateway.readJSON,calls=[],signals=[];let latest;
+  t.after(()=>gateway.readJSON=original);
+  const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+  let round=0;
+  gateway.readJSON=async(port,endpoint,signal)=>{
+    calls.push([port,endpoint]);signals.push(signal);
+    if(endpoint==='/')return {name:'magpie'};
+    if(endpoint==='/v1/magpie/concurrency')return {active:[]};
+    if(endpoint.endsWith('after=0'))return {object:'trace',pid:1,seq:++round,ids:[round],routes:[raw(round)],totals:{requests:round}};
+    return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  };
+  const backend=await require('../plugins/magpie-routes/backend.cjs').activate({host:{call:async()=>({revision:1,values:{port:54321,maskAccounts:true}})},publish:s=>latest=s});t.after(()=>backend.dispose());
+  await flush();assert.equal(calls.length,0);backend.call('reconnect');await flush();assert.equal(calls.length,0);
+  backend.update({visible:true});await flush();assert.equal(latest.routes[0].id,1);assert.ok(calls.some(([,p])=>p.includes('wait=1')));
+  const running=calls.length;backend.update({visible:true});await flush();assert.equal(calls.length,running);
+  t.mock.timers.tick(1500);await flush();assert.equal(calls.filter(([,p])=>p.includes('concurrency')).length,2);
+  backend.update({visible:false});assert.ok(signals.every(s=>s.aborted));const paused=calls.length;
+  backend.update({settings:{revision:2,values:{port:54322,maskAccounts:true}}});t.mock.timers.tick(30000);await flush();assert.equal(calls.length,paused);assert.equal(latest.routes[0].id,1);
+  backend.update({visible:true});await flush();assert.equal(latest.routes[0].id,2);assert.equal(calls.findLast(([,p])=>p.endsWith('after=0'))[0],54322);
+  backend.dispose();const stopped=calls.length;t.mock.timers.tick(30000);await flush();assert.equal(calls.length,stopped);
+});
+
+test('hidden backend cancels offline retry timers',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});const original=gateway.readJSON;let calls=0;
+  t.after(()=>gateway.readJSON=original);gateway.readJSON=async()=>{calls++;throw Object.assign(new Error('offline'),{code:'ECONNREFUSED'});};
+  const backend=await require('../plugins/magpie-routes/backend.cjs').activate({host:{call:async()=>({revision:1,values:{port:54321,maskAccounts:true}})},publish(){}});t.after(()=>backend.dispose());
+  const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+  backend.update({visible:true});await flush();assert.equal(calls,1);
+  backend.update({visible:false});t.mock.timers.tick(30000);await flush();assert.equal(calls,1);
+  backend.update({visible:true});await flush();assert.equal(calls,2);
+});
+
+test('pending allowance reads are canceled on endpoint change and hide, including before first visible context',async t=>{
+  const original=gateway.readJSON;t.after(()=>gateway.readJSON=original);let signal;
+  gateway.readJSON=async(_port,endpoint,abort)=>{
+    if(endpoint.includes('quotas/cards')){signal=abort;return new Promise((_,reject)=>abort.addEventListener('abort',()=>reject(abort.reason),{once:true}));}
+    return new Promise((_,reject)=>abort.addEventListener('abort',()=>reject(abort.reason),{once:true}));
+  };
+  const backend=await require('../plugins/magpie-routes/backend.cjs').activate({host:{call:async()=>({revision:1,values:{port:54321,maskAccounts:true}})},publish(){}});t.after(()=>backend.dispose());
+  const first=backend.call('cards'),rejected=assert.rejects(first,/abort/i);backend.update({settings:{revision:2,values:{port:54322,maskAccounts:true}}});assert.equal(signal.aborted,true);await rejected;
+  backend.update({visible:true});const second=backend.call('cards'),hidden=assert.rejects(second,/abort/i);backend.update({visible:false});assert.equal(signal.aborted,true);await hidden;
+  const third=backend.call('cards'),disposed=assert.rejects(third,/abort/i);backend.dispose();assert.equal(signal.aborted,true);await disposed;
+});

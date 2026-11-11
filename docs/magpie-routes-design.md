@@ -8,6 +8,8 @@ The host owns headings, materials, padding and header action outlets. Page, Notc
 
 The Notch body uses a bounded route stage and outcome/statistics footer. The Dock card reports intrinsic content size through the host's bubble sizing service. The rail has a separate compact presentation. Each view cleans up its controls, observers and subscriptions when disposed.
 
+The backend waits for the host’s aggregated `visible` context before starting its trace and concurrency reads. One visible occurrence keeps the shared reader active; losing the last visible demand aborts in-flight polling and clears retries. The host also stops an undemanded backend process. Restoring demand fetches a fresh gateway snapshot. Hidden page mounts defer local history and saved-allowance reads until shown; their DOM and selection state remain mounted.
+
 ## State and motion
 
 Stable keyed route nodes retain concurrent flights across unrelated trace updates. Selecting a historical request stops following live data; expired selections return to live. Account masking is shared across surfaces, but affects display only.

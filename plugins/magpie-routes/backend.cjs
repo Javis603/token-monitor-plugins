@@ -6,6 +6,8 @@ const path=require('node:path');
 exports.activate = async ({ host, publish }) => {
   let settings = await host.call('settings.get'), values = settings.values;
   const lifetime=new AbortController();
+  let cardController=new AbortController();
+  function cancelCards(){cardController.abort();cardController=new AbortController();}
   let history,historyDirectory;
   function readHistory(day){
     const directory=gateway.configDirectory(values.dataDirectory);
@@ -13,7 +15,7 @@ exports.activate = async ({ host, publish }) => {
     return history(day);
   }
   let maskWrites = Promise.resolve();
-  let disposed = false, generation = 0, controller, retryTimer, laneTimer;
+  let visible = false, disposed = false, generation = 0, controller, retryTimer, laneTimer;
   let routes = new Map(), seq = 0, pid = null;
   let state = { connection: 'connecting', error: '', endpoint: '', version: '', updatedAt: null,
     totals: { requests: 0, rerouted: 0, errors: 0 }, active: [], activityAvailable: false, routes: [], maskAccounts: values.maskAccounts, lifted: {},historyRevision:0 };
@@ -24,7 +26,7 @@ exports.activate = async ({ host, publish }) => {
     generation++; controller?.abort(); clearTimeout(retryTimer); clearTimeout(laneTimer);
   }
   async function start() {
-    stop(); if (disposed) return;
+    stop(); if (disposed || !visible) return;
     const run = generation; controller = new AbortController();
     const signal = controller.signal;
     seq = 0; pid = null;
@@ -77,11 +79,13 @@ exports.activate = async ({ host, publish }) => {
     if (current(run)) laneTimer = setTimeout(() => lanes(port, run, signal), 1500);
   }
   function applySettings(next) {
-    if (next.revision < settings.revision) return;
+    if (next.revision < settings.revision) return false;
     const previous = values; settings = next; values = next.values;
     state.maskAccounts = values.maskAccounts;
     if(previous.dataDirectory!==values.dataDirectory)state.historyRevision++;
-    if (previous.port !== values.port||previous.dataDirectory!==values.dataDirectory) void start(); else emit();
+    const reconnect=previous.port !== values.port||previous.dataDirectory!==values.dataDirectory;
+    if(reconnect)cancelCards();
+    emit();return reconnect;
   }
   function toggleMask() {
     // All renderer windows share this queue and the host's persisted setting.
@@ -91,13 +95,13 @@ exports.activate = async ({ host, publish }) => {
         schemaVersion: latest.schemaVersion, expectedRevision: latest.revision,
         patch: { maskAccounts: !latest.values.maskAccounts }
       });
-      applySettings(saved);
+      if(applySettings(saved))void start();
       return snapshot();
     });
     maskWrites = pending.catch(() => {});
     return pending;
   }
-  emit(); void start();
+  emit();
   return {
     call(method,params) {
       if (method === 'toggleMask') return toggleMask();
@@ -105,15 +109,19 @@ exports.activate = async ({ host, publish }) => {
       if (method === 'history') return readHistory(params?.day??'');
       if (method === 'cards') {
         if(disposed)return [];
-        const signal=controller?.signal,port=gateway.detectPort(values.port,values.dataDirectory);
+        const signal=cardController.signal,port=gateway.detectPort(values.port,values.dataDirectory);
         return gateway.readJSON(port,'/v1/magpie/quotas/cards',signal,5000).then(gateway.cards);
       }
       if (method === 'reconnect') { void start(); return snapshot(); }
       throw new Error('Unknown Magpie Routes operation');
     },
     update(context) {
-      if (context.settings) applySettings(context.settings);
+      const previous=visible;
+      if(typeof context.visible==='boolean')visible=context.visible;
+      const reconnect=context.settings?applySettings(context.settings):false;
+      if(!visible){if(previous){stop();cancelCards();}return;}
+      if(!previous||reconnect)void start();
     },
-    dispose() { disposed = true;lifetime.abort(); stop(); routes.clear(); }
+    dispose() { disposed = true;lifetime.abort();cardController.abort(); stop(); routes.clear(); }
   };
 };

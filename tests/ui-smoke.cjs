@@ -375,6 +375,20 @@ app.whenReady().then(async () => {
   fs.writeFileSync(path.join(evidence, 'page-fixture.png'), (await win.webContents.capturePage()).toPNG());
   await win.webContents.executeJavaScript(`(async()=>{
     page.dispose();const root=document.getElementById('surface'),header=document.getElementById('header-actions');root.replaceChildren();header.replaceChildren();
+    const hiddenContext={surface:'page',visible:false,headerActions:header,nativeData:{appearance:{reduceMotion:'on'}}};
+    const hiddenCalls=backendCalls.length,hiddenPage=magpie.mount(root,hiddenContext);
+    await new Promise(r=>setTimeout(r,40));
+    check('hidden-page-mount-defers-history-and-allowances',backendCalls.length===hiddenCalls);
+    pushMagpie({...structuredClone(sparkRestore),historyRevision:42});await new Promise(r=>setTimeout(r,40));
+    check('hidden-page-directory-change-defers-disk-and-network-reads',backendCalls.length===hiddenCalls);
+    hiddenPage.update({...hiddenContext,visible:true});await new Promise(r=>setTimeout(r,80));
+    check('showing-page-loads-history-and-allowances-once',backendCalls.slice(hiddenCalls).join(',')==='history,cards');
+    const retained=root.querySelector('.rr-stage'),loadedCalls=backendCalls.length;
+    hiddenPage.update(hiddenContext);pushMagpie({...structuredClone(sparkRestore),historyRevision:43});await new Promise(r=>setTimeout(r,40));
+    check('hiding-page-retains-dom-without-background-reads',retained.isConnected&&backendCalls.length===loadedCalls);
+    hiddenPage.update({...hiddenContext,visible:true});await new Promise(r=>setTimeout(r,80));
+    check('showing-page-refreshes-deferred-data-without-remount',root.querySelector('.rr-stage')===retained&&backendCalls.slice(loadedCalls).join(',')==='history,cards');
+    hiddenPage.dispose();root.replaceChildren();header.replaceChildren();
     for(const surface of ['notch','edgeDock']){
       const view=magpie.mount(root,{surface,visible:true,headerActions:header,nativeData:{appearance:{reduceMotion:'on'}}});await new Promise(r=>setTimeout(r,40));
       check('dsh-'+surface+'-whale',root.querySelector('.rr-source [data-brand="deepseek-color"] img')?.getAttribute('src').endsWith('deepseek-color.svg'));
