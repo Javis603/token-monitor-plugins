@@ -30,6 +30,26 @@
       },
       "versions": [
         {
+          "version": "0.1.2",
+          "changelog": {
+            "en": "Align the main routing graph with Magpie: route and nested-group headings, keyboard-accessible folding, member order, two-line account details and hierarchical wires. Restore live reply counters and quota, wallet and reserve labels while retaining account masking. Add concurrent-session context summaries, request/session/key grouping, purpose filters, metrics, saved allowance windows, retained-day browsing and recorded-event replay. Routing history and allowance reads remain read-only and metadata-only.",
+            "zh-CN": "主路由图对齐 Magpie：加入路由及嵌套组标题、支持键盘的展开折叠、成员顺序、两行账号信息与分层连线。补回实时回复计数、配额、钱包及保留账号标签，保留账号打码。 加入多会话上下文摘要、按请求／会话／密钥分组、用途筛选、指标、已保存的用量窗口、历史日浏览及记录事件回放。路由历史与用量读取保持只读，仅提供显示元数据。",
+            "zh-TW": "主路由圖對齊 Magpie：加入路由及巢狀群組標題、支援鍵盤的展開收合、成員順序、兩行帳號資訊與分層連線。補回即時回覆計數、配額、錢包及保留帳號標籤，保留帳號打碼。 加入多會話上下文摘要、按請求／會話／金鑰分組、用途篩選、指標、已儲存的用量視窗、歷史日瀏覽及記錄事件重播。路由歷史與用量讀取維持唯讀，僅提供顯示中繼資料。",
+            "ko": "기본 라우팅 그래프를 Magpie에 맞춰 경로 및 중첩 그룹 제목, 키보드로 펼치기와 접기, 구성원 순서, 두 줄 계정 정보와 계층 연결선을 추가했습니다. 계정 마스킹을 유지하면서 실시간 응답 카운터, 할당량, 잔액 및 예비 계정 표시를 복원했습니다. 동시 세션 컨텍스트 요약, 요청／세션／키별 그룹화, 용도 필터, 지표, 저장된 사용량, 날짜별 기록 및 기록 이벤트 재생을 추가했습니다. 기록과 사용량은 메타데이터만 읽으며 변경하지 않습니다.",
+            "ja": "メインのルーティング図を Magpie に合わせ、ルートとネストしたグループの見出し、キーボードでの折りたたみ、メンバー順、2行のアカウント情報、階層的な接続線を追加しました。アカウントのマスキングを維持しながら、応答中のカウンター、割り当て、残高、予約アカウントの表示を復元しました。 同時セッションのコンテキスト要約、リクエスト／セッション／キー別のグループ化、用途フィルター、指標、保存済み使用量、日別履歴、記録イベントの再生を追加しました。履歴と使用量の読み取りはメタデータのみの読み取り専用です。",
+            "pt-BR": "Alinha o grafo principal de roteamento ao Magpie com títulos de rotas e grupos aninhados, expansão e recolhimento pelo teclado, ordem dos membros, detalhes de conta em duas linhas e conexões hierárquicas. Restaura contadores de resposta em tempo real e rótulos de cota, saldo e reserva, mantendo o mascaramento das contas. Adiciona resumos de contexto por sessão, agrupamento por requisição/sessão/chave, filtros de finalidade, métricas, cotas salvas, histórico diário e reprodução dos eventos registrados. O acesso permanece somente leitura e limitado a metadados."
+          },
+          "engines": {
+            "tokenMonitor": ">=0.81.0"
+          },
+          "url": "https://raw.githubusercontent.com/Javis603/token-monitor-plugins/dist/magpie-routes-0.1.2.tmplugin",
+          "sha256": "af8bc8b7bf96ec954a6b0d32b81528cb778e9593da58e9916a887d79bfacf884",
+          "types": [
+            "widget",
+            "page"
+          ]
+        },
+        {
           "version": "0.1.1",
           "changelog": {
             "en": "Fix the blank DeepSeek Harness icon and source name. Sync routing explanations, context cards, agent marks and Chinese translations with Magpie 9c39edb9; preserve canceled-request status and fall back to a generic mark for unknown icons.",
