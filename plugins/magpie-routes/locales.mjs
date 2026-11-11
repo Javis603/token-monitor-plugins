@@ -736,7 +736,11 @@ export default {
     "Gateway key": "Gateway key",
     "as of {time}": "as of {time}",
     "Some history files could not be read. Dates and totals may be incomplete: {days}": "Some history files could not be read. Dates and totals may be incomplete: {days}",
-    "Magpie data directory must be an absolute path.": "Magpie data directory must be an absolute path."
+    "Magpie data directory must be an absolute path.": "Magpie data directory must be an absolute path.",
+    "Previous page": "Previous page",
+    "Next page": "Next page",
+    "Request pages": "Request pages",
+    "Page {page} of {pages} · {from}–{to} of {total}": "Page {page} of {pages} · {from}–{to} of {total}"
   },
   "zh-TW": {
     "Subagent": "子代理",
@@ -1475,7 +1479,11 @@ export default {
     "Gateway key": "閘道金鑰",
     "as of {time}": "截至 {time}",
     "Some history files could not be read. Dates and totals may be incomplete: {days}": "部分歷史檔案無法讀取，日期及統計可能不完整：{days}",
-    "Magpie data directory must be an absolute path.": "Magpie 資料目錄必須填寫絕對路徑。"
+    "Magpie data directory must be an absolute path.": "Magpie 資料目錄必須填寫絕對路徑。",
+    "Previous page": "上一頁",
+    "Next page": "下一頁",
+    "Request pages": "請求分頁",
+    "Page {page} of {pages} · {from}–{to} of {total}": "第 {page}／{pages} 頁 · {from}–{to}／{total} 筆"
   },
   "zh-CN": {
     "Subagent": "子代理",
@@ -2214,6 +2222,10 @@ export default {
     "Gateway key": "网关密钥",
     "as of {time}": "截至 {time}",
     "Some history files could not be read. Dates and totals may be incomplete: {days}": "部分历史文件无法读取，日期和统计可能不完整：{days}",
-    "Magpie data directory must be an absolute path.": "Magpie 数据目录必须填写绝对路径。"
+    "Magpie data directory must be an absolute path.": "Magpie 数据目录必须填写绝对路径。",
+    "Previous page": "上一页",
+    "Next page": "下一页",
+    "Request pages": "请求分页",
+    "Page {page} of {pages} · {from}–{to} of {total}": "第 {page}／{pages} 页 · {from}–{to}／{total} 条"
   }
 };

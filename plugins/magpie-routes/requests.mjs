@@ -47,6 +47,11 @@ export function requestMetrics(r){
     cost:{label:'Cost',value:[priced?'≈'+fmtCost({cost:r.cost,unpriced:r.unpriced||0}):'',credits].filter(Boolean).join(' · '),number:priced?r.cost:NaN}
   };
 }
+export function sortRequests(rows,by,metricsFor=requestMetrics){
+  const timed=by==='newest'||by==='oldest';
+  return rows.map(row=>{const n=timed?Date.parse(row.time):metricsFor(row)[by]?.number;return {row,n:Number.isFinite(n)?n:-Infinity};})
+    .sort((a,b)=>timed?(by==='oldest'?a.n-b.n:b.n-a.n)|| (by==='oldest'?a.row.id-b.row.id:b.row.id-a.row.id):b.n-a.n).map(item=>item.row);
+}
 export function groupRequests(rows,by){
   if(by==='request')return rows.map(r=>({key:requestKey(r),rows:[r],route:r}));
   const groups=new Map();
@@ -98,7 +103,11 @@ export function createRequests(ctx,actions,sessionNumbers){
   let value,by='request',sort='newest',allAccounts=false,metrics=['duration','ttft','tokens','cache','speed','cost'];const folded=new Set(),rows=new Map(),groupRows=new Map(),dayRows=new Map();
   try{by=localStorage.getItem('magpie-routes.groupBy')||by;const saved=JSON.parse(localStorage.getItem('magpie-routes.metrics')||'null');if(Array.isArray(saved))metrics=metrics.filter(k=>saved.includes(k));}catch{}
   if(!['request','session','key'].includes(by))by='request';
-  let lastRows=[],lastKey='',lastCards,lastTallies;
+  let lastRows=[],lastKey='',lastCards,lastTallies,page=0,pageScope='',lastScope='',lastSelection='';
+  const pageSize=100,paging=el('nav','rr-history-paging'),previous=el('button','rr-text',t('Previous page')),pageLabel=el('span'),next=el('button','rr-text',t('Next page'));
+  paging.setAttribute('aria-label',t('Request pages'));pageLabel.setAttribute('aria-live','polite');
+  previous.type=next.type='button';previous.dataset.action='previous-page';next.dataset.action='next-page';
+  previous.onclick=()=>{page--;render();};next.onclick=()=>{page++;render();};paging.append(previous,pageLabel,next);node.insertBefore(paging,body);
   const buttons=new Map();
   for(const [id,label]of [['request','By request'],['session','By session'],['key','By key']]){const b=el('button','rr-text',t(label));b.type='button';b.dataset.groupBy=id;b.onclick=()=>{by=id;try{localStorage.setItem('magpie-routes.groupBy',by);}catch{}render();};buttons.set(id,b);tools.append(b);}
   const purposes=el('details','rr-metric-pick rr-purpose-pick'),purposeLabel=el('summary','',t('Purpose filter')),purposeItems=el('div');purposes.append(purposeLabel,purposeItems);
@@ -120,7 +129,8 @@ export function createRequests(ctx,actions,sessionNumbers){
     if(sort==='cost'&&!priced)sort='newest';sorting.value=sort;
     // A kept day is immutable while unrelated live requests arrive. Preserve
     // its DOM and scroll/focus, instead of repainting up to 2000 rows per tick.
-    const key=JSON.stringify([by,sort,metrics,[...folded],allAccounts,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,[...new Set(value.allRoutes.map(requestPurpose))],value.filtered.some(r=>!r.done)?Math.floor(Date.now()/1000):0]);
+    const scope=JSON.stringify([by,sort,value.historyDay,value.filter,value.purpose]);if(scope!==pageScope){page=0;pageScope=scope;}
+    const key=JSON.stringify([page,by,sort,metrics,[...folded],allAccounts,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,[...new Set(value.allRoutes.map(requestPurpose))],value.filtered.some(r=>!r.done)?Math.floor(Date.now()/1000):0]);
     if(key===lastKey&&lastCards===value.cards&&lastTallies===value.tallies&&lastRows.length===value.filtered.length&&lastRows.every((r,i)=>r===value.filtered[i]))return;
     lastKey=key;lastCards=value.cards;lastTallies=value.tallies;lastRows=value.filtered;
 
@@ -138,16 +148,23 @@ export function createRequests(ctx,actions,sessionNumbers){
     const groups=groupRequests(value.filtered,by),label=t(groups.some(g=>!folded.has(g.key))?'Fold all':'Unfold all');if(foldAll.textContent!==label)foldAll.textContent=label;
     const note=el('span','',t('{n} requests',{n:value.filtered.length}));if(value.historyCut)note.append(' · ',t('Latest {n} requests',{n:2000}));head.replaceChildren(el('h3','',t('Requests')),note);
     if(value.historyLoading)head.append(el('span','',t('Loading…')));
-    const sorted=[...value.filtered].sort((a,b)=>sort==='newest'?Date.parse(b.time)-Date.parse(a.time)||b.id-a.id:sort==='oldest'?Date.parse(a.time)-Date.parse(b.time)||a.id-b.id:(Number.isFinite(requestMetrics(b)[sort]?.number)?requestMetrics(b)[sort].number:-Infinity)-(Number.isFinite(requestMetrics(a)[sort]?.number)?requestMetrics(a)[sort].number:-Infinity));
-    const groupKeys=new Set(groupRequests(sorted,by).map(g=>g.key));for(const key of groupRows.keys())if(!groupKeys.has(key)){groupRows.delete(key);folded.delete(key);}
+    const metricCache=new Map(),metricsFor=r=>{if(!metricCache.has(r))metricCache.set(r,requestMetrics(r));return metricCache.get(r);};
+    const sorted=sortRequests(value.filtered,sort,metricsFor),pages=Math.max(1,Math.ceil(sorted.length/pageSize));
+    const selection=value.route?requestKey(value.route):'';
+    if(selection!==lastSelection&&!value.follow&&scope===lastScope){const at=sorted.findIndex(r=>requestKey(r)===selection);if(at>=0)page=Math.floor(at/pageSize);}
+    lastSelection=selection;lastScope=scope;page=Math.max(0,Math.min(page,pages-1));
+    paging.hidden=pages===1;previous.disabled=page===0;next.disabled=page===pages-1;
+    pageLabel.textContent=t('Page {page} of {pages} · {from}–{to} of {total}',{page:page+1,pages,from:sorted.length?page*pageSize+1:0,to:Math.min((page+1)*pageSize,sorted.length),total:sorted.length});
+    const completeGroups=new Map(groupRequests(sorted,by).map(g=>[g.key,g]));
+    const groupKeys=new Set(completeGroups.keys());for(const key of groupRows.keys())if(!groupKeys.has(key)){groupRows.delete(key);folded.delete(key);}
     const visible=[];
-    for(const g of groupRequests(sorted,by)){
+    for(const g of groupRequests(sorted.slice(page*pageSize,(page+1)*pageSize),by)){
       if(by!=='request'){
         let b=groupRows.get(g.key);if(!b){b=el('button','rr-request-group');b.type='button';b.onclick=()=>{if(folded.has(g.key))folded.delete(g.key);else folded.add(g.key);render();};groupRows.set(g.key,b);}b.replaceChildren();b.setAttribute('aria-expanded',String(!folded.has(g.key)));
-        const count=g.rows.length,{prompt,read}=promptTotals(g.rows.filter(r=>r.done));let totalN=0,totalW=0;for(const r of g.rows)if(routeSucceeded(r)){const d=decodeOf(r);if(d){totalN+=d.n;totalW+=d.w;}}
-        b.append(el('strong','',by==='key'?(g.route.callerKeyName||(g.route.callerKey?t('Gateway key'):t('No gateway key'))):g.route.sessionKey?agentName(g.route.agent)+' · '+t('Session {n}',{n:sessionNumbers.get(g.route.agent+' '+g.route.sessionKey)}):t('No session ID')),el('span','',t('{n} requests',{n:count})+' · '+short(g.rows.reduce((sum,r)=>sum+(r.tokens||0),0))+' '+t('tokens')));
+        const all=completeGroups.get(g.key).rows,count=all.length,{prompt,read}=promptTotals(all.filter(r=>r.done));let totalN=0,totalW=0;for(const r of all)if(routeSucceeded(r)){const d=decodeOf(r);if(d){totalN+=d.n;totalW+=d.w;}}
+        b.append(el('strong','',by==='key'?(g.route.callerKeyName||(g.route.callerKey?t('Gateway key'):t('No gateway key'))):g.route.sessionKey?agentName(g.route.agent)+' · '+t('Session {n}',{n:sessionNumbers.get(g.route.agent+' '+g.route.sessionKey)}):t('No session ID')),el('span','',t('{n} requests',{n:count})+' · '+short(all.reduce((sum,r)=>sum+(r.tokens||0),0))+' '+t('tokens')));
         if((by==='key'||g.route.sessionKey)&&prompt&&metrics.includes('cache'))b.append(metricNode({label:'Avg. cache',value:hitPct(read/prompt)}));if((by==='key'||g.route.sessionKey)&&totalW&&metrics.includes('speed'))b.append(metricNode({label:'Avg. speed',value:t('{n} tok/s',{n:Math.round(totalN*1000/totalW)})}));
-        if(metrics.includes('cost')){const priced=g.rows.filter(r=>r.priced&&Number.isFinite(r.cost)),credited=g.rows.flatMap(r=>(r.usage||[]).filter(u=>u.credits!=null));const cost=[priced.length?'≈'+fmtCost({cost:priced.reduce((n,r)=>n+(r.cost||0),0),unpriced:g.rows.some(r=>!r.priced||r.unpriced)?1:0}):'',credited.length?t('{n} credits',{n:countFormat.format(credited.reduce((n,u)=>n+u.credits,0))}):''].filter(Boolean).join(' · ');if(cost)b.append(metricNode({label:'Cost',value:cost}));}
+        if(metrics.includes('cost')){const priced=all.filter(r=>r.priced&&Number.isFinite(r.cost)),credited=all.flatMap(r=>(r.usage||[]).filter(u=>u.credits!=null));const cost=[priced.length?'≈'+fmtCost({cost:priced.reduce((n,r)=>n+(r.cost||0),0),unpriced:all.some(r=>!r.priced||r.unpriced)?1:0}):'',credited.length?t('{n} credits',{n:countFormat.format(credited.reduce((n,u)=>n+u.credits,0))}):''].filter(Boolean).join(' · ');if(cost)b.append(metricNode({label:'Cost',value:cost}));}
         visible.push(b);
       }
       if(by!=='request'&&folded.has(g.key))continue;
@@ -155,12 +172,12 @@ export function createRequests(ctx,actions,sessionNumbers){
         const key=requestKey(r);let row=rows.get(key);if(!row){row=el('button','rr-request-detail');row.type='button';row.onclick=()=>actions.pick(r);rows.set(key,row);}
         const title=el('span','rr-request-title');title.append(brand(ctx,r.agent),el('strong','',agentName(r.agent)),el('code','',r.served||r.model),el('time','',new Date(r.time).toLocaleTimeString(locale(),{hour12:false})),el('span','',routeStatus(r).label));
         const detail=el('span','rr-request-details');
-        for(const key of metrics){const metric=requestMetrics(r)[key];if(metric.value){const n=metricNode(metric);n.dataset.metric=key;detail.append(n);}}
+        for(const key of metrics){const metric=metricsFor(r)[key];if(metric.value){const n=metricNode(metric);n.dataset.metric=key;detail.append(n);}}
         const live=liveLabel(r);if(live)detail.append(el('span','rr-request-live',live));
         row.replaceChildren(title,detail);row.dataset.requestId=r.id;row.dataset.tone=routeStatus(r).tone;row.setAttribute('aria-pressed',String(Boolean(value.route)&&requestKey(value.route)===key));visible.push(row);
       }
     }
-    const keep=new Set(value.filtered.map(requestKey));for(const key of rows.keys())if(!keep.has(key))rows.delete(key);
+    const kept=new Set(visible);for(const [key,row]of rows)if(!kept.has(row))rows.delete(key);
     const wanted=new Set(visible);for(const row of [...list.children])if(!wanted.has(row))row.remove();visible.forEach((row,i)=>{if(list.children[i]!==row)list.insertBefore(row,list.children[i]||null);});
     if(!visible.length)list.replaceChildren(el('p','rr-empty',t('No requests match this filter.')));
     const shown=!value.historyDay&&!value.purpose.length&&!value.filter&&value.tallies?.length?value.tallies:accountSummary(value.filtered),title=el('div','rr-history-head');title.append(el('h3','',t('Accounts and keys')));

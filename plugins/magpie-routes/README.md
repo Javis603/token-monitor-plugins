@@ -46,6 +46,8 @@ The main page also shows concurrent-session context, request/session/key groupin
 
 Set **Magpie data directory** to an absolute path when Magpie uses a portable or custom data folder (the folder containing settings.json and routing/). Leave it empty for the standard location. Unavailable USD cost sorting is hidden; reported credits remain visible. Damaged compressed history is skipped with an incomplete-history warning.
 
+Request lists show 100 requests per page. Sorting, filters, group totals and replay still use the entire selected scope.
+
 ## License and maintenance
 
 A Token Monitor community integration, **not an official Magpie product**. Some code and artwork are adapted from [yetone/magpie](https://github.com/yetone/magpie). Original code uses [MIT](LICENSE); upstream attribution and license details are in [SOURCE-NOTICE.md](SOURCE-NOTICE.md) and [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt).

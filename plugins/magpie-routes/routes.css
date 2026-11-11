@@ -354,3 +354,5 @@
 @container(min-width:1150px) { .rr-history-columns { grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr); } }
 /* context.css loads after routes.css; session strips must override its folded-only stack rule. */
 .rr-context-sessions .rr-context-session .ctx-stack { display:flex; flex:none; width:100%; height:5px; min-height:5px; }
+
+.rr-history-paging { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin:10px 0; font-size:11px; color:var(--rr-muted); }

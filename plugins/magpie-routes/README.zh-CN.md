@@ -46,6 +46,8 @@
 
 Magpie 使用便携版或自定义文件夹时，请将“Magpie 数据目录”设为绝对路径，指向内含 settings.json 和 routing/ 的文件夹；留空使用标准位置。没有定价数据时隐藏美元成本排序，保留实际回报的 credits。损坏的压缩历史会跳过，并提示记录可能不完整。
 
+请求列表每页显示 100 条；排序、筛选、群组统计和重播仍涵盖整个选定范围。
+
 ## 授权与维护
 
 Token Monitor 社区集成，**并非 Magpie 官方产品**。部分代码和图像改编自 [yetone/magpie](https://github.com/yetone/magpie)。原创代码采用 [MIT](LICENSE)，上游来源及授权详见 [SOURCE-NOTICE.md](SOURCE-NOTICE.md) 和 [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt)。

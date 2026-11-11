@@ -46,6 +46,8 @@ A página principal também oferece contexto por sessão, agrupamento por requis
 
 Para uma instalação portátil ou uma pasta de dados personalizada, informe em **Magpie data directory** o caminho absoluto da pasta que contém settings.json e routing/. Deixe vazio para usar o local padrão. A ordenação por custo em USD fica oculta quando não há preços; os credits informados continuam visíveis. Arquivos de histórico compactados e danificados são ignorados com um aviso de histórico incompleto.
 
+A lista mostra 100 solicitações por página. A ordenação, os filtros, os totais dos grupos e a reprodução continuam abrangendo todo o escopo selecionado.
+
 ## Licença e manutenção
 
 Integração da comunidade Token Monitor, **não é um produto oficial do Magpie**. Parte do código e das imagens adapta [yetone/magpie](https://github.com/yetone/magpie). O código original usa [MIT](LICENSE); a atribuição e a licença upstream estão em [SOURCE-NOTICE.md](SOURCE-NOTICE.md) e [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt).

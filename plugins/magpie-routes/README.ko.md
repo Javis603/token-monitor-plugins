@@ -46,6 +46,8 @@ Token Monitor에서 로컬 Magpie의 실시간 라우팅, 컨텍스트 요약, �
 
 포터블 버전이나 사용자 지정 데이터 폴더를 쓰는 경우 플러그인 설정의 **Magpie data directory**에 settings.json 및 routing/을 포함하는 폴더의 절대 경로를 입력하세요. 비워 두면 기본 위치를 사용합니다. USD 가격이 없으면 비용 정렬을 숨기며 보고된 credits는 표시합니다. 손상된 압축 기록은 건너뛰고 기록이 불완전할 수 있음을 알립니다.
 
+요청 목록은 페이지당 100개를 표시합니다. 정렬, 필터, 그룹 합계 및 재생은 선택한 전체 범위에 적용됩니다.
+
 ## 라이선스 및 유지 관리
 
 Token Monitor 커뮤니티 통합이며 **Magpie 공식 제품이 아닙니다**. 일부 코드와 이미지는 [yetone/magpie](https://github.com/yetone/magpie)를 기반으로 합니다. 원본 코드는 [MIT](LICENSE)이며 업스트림 출처와 라이선스는 [SOURCE-NOTICE.md](SOURCE-NOTICE.md) 및 [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt)에 있습니다.

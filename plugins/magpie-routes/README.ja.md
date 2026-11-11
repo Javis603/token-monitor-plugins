@@ -46,6 +46,8 @@ UI は英語、繁体字、簡体字に対応し、それ以外のアプリ言�
 
 ポータブル版や独自のデータフォルダーを使う場合は、プラグイン設定の **Magpie data directory** に settings.json と routing/ を含むフォルダーの絶対パスを指定してください。空欄なら標準の場所を使います。USD 価格がない場合は費用順を非表示にし、報告された credits は表示します。破損した圧縮履歴はスキップし、履歴が不完全な可能性を表示します。
 
+リクエスト一覧は1ページ100件です。並べ替え、フィルター、グループ集計、再生は選択範囲全体を対象にします。
+
 ## ライセンスと保守
 
 Token Monitor コミュニティによる統合であり、**Magpie の公式製品ではありません**。一部のコードと画像は [yetone/magpie](https://github.com/yetone/magpie) に基づきます。独自のコードは [MIT](LICENSE) で、上流の出典とライセンスは [SOURCE-NOTICE.md](SOURCE-NOTICE.md) と [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt) に記載しています。

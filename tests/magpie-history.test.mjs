@@ -116,3 +116,12 @@ test('upstream outcome distinguishes informational notes, broken 200 replies and
   assert.equal(routeStatus({...note,tries:[{id:'a',done:true,status:200,fail:'other'}]}).tone,'failed');
   assert.equal(routeStatus({...note,status:499,canceled:true}).label,'Canceled');
 });
+
+test('request sorting computes each metric once and preserves unknowns, zeros and ties',async()=>{
+  const {sortRequests}=await import('../plugins/magpie-routes/requests.mjs');
+  const rows=[{id:1,time:'2026-11-09T01:00:00Z',score:0},{id:2,time:'2026-11-09T02:00:00Z',score:undefined},{id:3,time:'2026-11-09T02:00:00Z',score:9},{id:4,time:'2026-11-09T02:00:00Z',score:9}];
+  const calls=new Map(),metricsFor=r=>{calls.set(r.id,(calls.get(r.id)||0)+1);return {tokens:{number:r.score}};};
+  assert.deepEqual(sortRequests(rows,'tokens',metricsFor).map(r=>r.id),[3,4,1,2]);assert.deepEqual([...calls.values()],[1,1,1,1]);
+  assert.deepEqual(rows.map(r=>r.id),[1,2,3,4]);
+  assert.deepEqual(sortRequests(rows,'newest').map(r=>r.id),[4,3,2,1]);assert.deepEqual(sortRequests(rows,'oldest').map(r=>r.id),[1,2,3,4]);
+});
