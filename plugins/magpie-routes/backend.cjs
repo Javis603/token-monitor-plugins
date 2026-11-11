@@ -27,6 +27,7 @@ exports.activate = async ({ host, publish }) => {
   }
   async function start() {
     stop(); if (disposed || !visible) return;
+    cancelCards();
     const run = generation; controller = new AbortController();
     const signal = controller.signal;
     seq = 0; pid = null;
@@ -49,7 +50,7 @@ exports.activate = async ({ host, publish }) => {
           routes = new Map();
           // On first connect the concurrent activity read may already have
           // arrived. Keep it; invalidate activity only on a known restart.
-          if (pid !== null) { state.active = []; state.activityAvailable = false; }
+          if (pid !== null) { state.active = []; state.activityAvailable = false; cancelCards(); }
         }
         pid = next.pid; seq = next.seq;
         const ids = new Set(next.ids);
@@ -62,6 +63,7 @@ exports.activate = async ({ host, publish }) => {
       if (!current(run)) return;
       generation++;
       controller.abort(); clearTimeout(laneTimer);
+      cancelCards();
       state = { ...state, connection: 'offline', activityAvailable: false, error: ['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH'].includes(error.code)
         ? '連不到 Magpie。請確認 menu bar 的 Magpie 仍在運行；會自動重連。' : error.message };
       emit(); retryTimer = setTimeout(start, 3000);
@@ -84,7 +86,7 @@ exports.activate = async ({ host, publish }) => {
     state.maskAccounts = values.maskAccounts;
     if(previous.dataDirectory!==values.dataDirectory)state.historyRevision++;
     const reconnect=previous.port !== values.port||previous.dataDirectory!==values.dataDirectory;
-    if(reconnect)cancelCards();
+    if(reconnect){cancelCards();state.connection='connecting';}
     emit();return reconnect;
   }
   function toggleMask() {

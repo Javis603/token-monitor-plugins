@@ -65,7 +65,7 @@ app.whenReady().then(async () => {
     const css=${JSON.stringify(manifests['magpie-routes'].css)};for(const file of css){const link=document.createElement('link');link.rel='stylesheet';link.href='tm-plugin://magpie-routes/'+file;document.head.append(link)}
     const plugin=await import('tm-plugin://magpie-routes/ui.mjs');
     window.backendCalls=[];
-    const ctx={asset:name=>'tm-plugin://magpie-routes/'+name,backend:{call:async(method,params)=>{backendCalls.push(method);if(method==='history'){if(window.delayHistory)return new Promise(resolve=>window.resolveHistory=resolve);return structuredClone(window.historyFixtures?.[params?.day||'']||{days:[],routes:[],cut:false,tallies:[]});}if(method==='cards')return structuredClone(window.cardsFixture||[]);return (${JSON.stringify(magpie)});},subscribe:fn=>{window.pushMagpie=fn;return()=>{}}},app:{reportBubbleSize(){}}};
+    const ctx={asset:name=>'tm-plugin://magpie-routes/'+name,backend:{call:async(method,params)=>{backendCalls.push(method);if(method==='history'){if(window.delayHistory)return new Promise(resolve=>window.resolveHistory=resolve);return structuredClone(window.historyFixtures?.[params?.day||'']||{days:[],routes:[],cut:false,tallies:[]});}if(method==='cards'){if(window.delayCards)return new Promise(resolve=>window.resolveCards=resolve);return structuredClone(window.cardsFixture||[]);}return (${JSON.stringify(magpie)});},subscribe:fn=>{window.pushMagpie=fn;return()=>{}}},app:{reportBubbleSize(){}}};
     window.magpie=await plugin.activate(ctx);
     let missing=false;try{magpie.mount(root,{surface:'page',visible:true})}catch(e){missing=/Token Monitor/.test(e.message)}
     check('missing-header-host-reports-clear-requirement',missing);
@@ -203,6 +203,15 @@ app.whenReady().then(async () => {
     pools()[0].querySelector('.rr-branch-toggle').click();
     check('folding-one-pool-keeps-other-group-expanded',root.querySelectorAll('.rr-seat').length===3&&pools()[1].querySelector('.rr-branch-toggle').getAttribute('aria-expanded')==='true');
     pushMagpie(structuredClone(poolFixture));check('pool-fold-persists-without-affecting-other-group',root.querySelectorAll('.rr-seat').length===3);
+  })()`);
+  await win.webContents.executeJavaScript(`(()=>{
+    const root=document.getElementById('surface'),template=structuredClone(sparkRestore.routes[0]);
+    const routes=['A','B'].map((group,i)=>({...structuredClone(template),id:80+i,agent:i?'codex':'t3code',group:{id:group,name:'Team '+group},order:(i?['X','Z']:['X','Y']).map(id=>({...structuredClone(template.order[0]),id,kind:'account',who:id,model:'gpt-5',via:[],usedPercent:i?73:20})),tries:[]}));
+    pushMagpie({...structuredClone(sparkRestore),routes});
+    const headings=[...root.querySelectorAll('.rr-seats > .rr-branch')],a=headings.find(n=>n.querySelector('strong').textContent==='Team A'),b=headings.find(n=>n.querySelector('strong').textContent==='Team B');
+    const names=branch=>[...root.querySelectorAll('.rr-seats > .rr-seat')].filter(n=>n.dataset.parent===branch.dataset.node).map(n=>n.querySelector('.rr-seat-name strong').textContent);
+    check('shared-seat-stays-under-first-routing-group',names(a).join(',')==='X,Y'&&names(b).join(',')==='Z');
+    check('shared-seat-displays-latest-account-metadata',root.querySelector('.rr-seat .rr-bar i').style.width==='73%');
   })()`);
   await win.webContents.executeJavaScript(`(async()=>{
     const root=document.getElementById('surface'),template=structuredClone(sparkRestore.routes[0]),now=Date.now();
@@ -380,6 +389,28 @@ app.whenReady().then(async () => {
   await win.webContents.executeJavaScript(`document.querySelector('.rr-back-live').click();pushMagpie(sparkRestore)`);
   await win.webContents.executeJavaScript('new Promise(r=>setTimeout(r,150))');
   fs.writeFileSync(path.join(evidence, 'page-fixture.png'), (await win.webContents.capturePage()).toPNG());
+  await win.webContents.executeJavaScript(`(async()=>{
+    const root=document.getElementById('surface'),template=structuredClone(sparkRestore.routes[0]);
+    template.order=template.order.map(w=>({...w,kind:'account',who:w.name}));
+    const fixture={...structuredClone(sparkRestore),routes:[template],processId:100,endpoint:'127.0.0.1:3425',connection:'online'};
+    const wallet=n=>template.order.map(w=>({kind:'subscription',provider:'codex',user:w.who,windows:[{name:'Wallet',balance:n,unit:'USD'}]}));
+    const wait=()=>new Promise(r=>setTimeout(r,40)),text=()=>root.querySelector('.rr-account-list').textContent,reads=()=>backendCalls.filter(m=>m==='cards').length;
+    cardsFixture=wallet(25);pushMagpie(fixture);await wait();check('allowances-initial-source-loaded',text().includes('25 USD'));
+    delayCards=true;root.querySelector('.rr-account-list button').click();const oldResponse=resolveCards,oldCards=wallet(25),before=reads();
+    const switched={...fixture,endpoint:'127.0.0.1:54322',connection:'connecting'};pushMagpie(switched);await wait();
+    check('endpoint-change-clears-old-allowances-before-online',!text().includes('25 USD')&&reads()===before);
+    delayCards=false;cardsFixture=wallet(80);switched.connection='online';pushMagpie(switched);await wait();
+    check('endpoint-online-fetches-fresh-allowances-once',text().includes('80 USD')&&reads()===before+1);
+    oldResponse(oldCards);await wait();check('late-old-endpoint-cards-cannot-reappear',text().includes('80 USD')&&!text().includes('25 USD'));
+    const previous=reads();pushMagpie(structuredClone(switched));await wait();check('same-source-live-update-does-not-refetch-allowances',reads()===previous);
+    cardsFixture=wallet(60);switched.processId++;pushMagpie(switched);check('process-change-clears-old-allowances-immediately',!text().includes('80 USD'));await wait();
+    check('process-change-refreshes-allowances-without-directory-change',text().includes('60 USD')&&reads()===previous+1);
+    const context={surface:'page',visible:false,headerActions:document.getElementById('header-actions'),nativeData:{appearance:{reduceMotion:'on'}}};page.update(context);
+    const hiddenReads=reads();cardsFixture=wallet(40);switched.processId++;pushMagpie(switched);await wait();
+    check('hidden-process-change-defers-allowance-read',reads()===hiddenReads);
+    page.update({...context,visible:true});await wait();check('show-after-process-change-loads-new-allowances',text().includes('40 USD')&&reads()===hiddenReads+1);
+    pushMagpie(sparkRestore);
+  })()`);
   await win.webContents.executeJavaScript(`(async()=>{
     page.dispose();const root=document.getElementById('surface'),header=document.getElementById('header-actions');root.replaceChildren();header.replaceChildren();
     const hiddenContext={surface:'page',visible:false,headerActions:header,nativeData:{appearance:{reduceMotion:'on'}}};

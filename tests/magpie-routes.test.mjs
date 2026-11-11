@@ -209,6 +209,19 @@ test('simultaneous routes retain separate route headings and only held-out seats
   assert.equal(tree.find(n=>n.name==='Auto').mode,'');
 });
 
+test('shared seats keep their first route owner and latest account metadata',async()=>{
+  const {stageSeats,stageTree}=await import('../plugins/magpie-routes/model.mjs');
+  const seat=id=>({id,kind:'account',provider:'codex',name:'Codex',model:'gpt-5',who:id});
+  const a={id:1,group:{id:'a',name:'Team A'},order:['x','y'].map(seat),tries:[]};
+  const b={id:2,group:{id:'b',name:'Team B'},order:['x','z'].map(seat),tries:[]};
+  b.order[0].usedPercent=73;
+  const entries=stageSeats([a,b]);
+  assert.deepEqual(entries.map(e=>[e.candidate.id,e.route.group.id]),[['x','a'],['y','a'],['z','b']]);
+  assert.equal(entries[0].candidate.usedPercent,73);
+  assert.deepEqual(stageTree(entries).filter(n=>n.depth===0).map(n=>[n.name,n.seats.map(e=>e.candidate.id)]),[['Team A',['x','y']],['Team B',['z']]]);
+  assert.deepEqual(stageSeats([b,a]).map(e=>[e.candidate.id,e.route.group.id]),[['x','b'],['z','b'],['y','a']]);
+});
+
 test('stage row words consume safe live counters, intent, wallet and restriction metadata', async () => {
   const {seatNote}=await import('../plugins/magpie-routes/story.mjs');
   const {candidateState}=await import('../plugins/magpie-routes/model.mjs');

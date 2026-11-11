@@ -96,7 +96,15 @@ export function stageSeats(routes) {
       for (let i=0;i<x.length;i++) if (x[i] !== y[i]) return typeof x[i] === 'number' ? x[i]-y[i] : x[i].localeCompare(y[i]);
       return 0;
     });
-    for (const candidate of entries) seats.set(seatKey(candidate), {key:seatKey(candidate), candidate, route});
+    for (const candidate of entries) {
+      const key=seatKey(candidate);
+      if(!seats.has(key))seats.set(key,{key,candidate,route});
+    }
+  }
+  // Upstream wayAt keeps the first owner; wOf independently takes the latest
+  // account metadata. A shared seat must not move to another route heading.
+  for(const route of routes)for(const candidate of [...route.order,...(route.left||[])]){
+    const entry=seats.get(seatKey(candidate));if(entry)entry.candidate=candidate;
   }
   return [...seats.values()];
 }

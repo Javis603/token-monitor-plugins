@@ -19,6 +19,7 @@ export async function activate(ctx) {
       let error = '', view, kind, language, headerActions;
       let historyDay='',historyRows=[],historyDays=[],historyCut=false,historyLoading=false,scopeError='',historyRead=0,tallies=[],historyAt=0,historyWarning='',historyRevision=data.historyRevision,historyDirty=false;
       let cards=[],cardsLoading=false,cardsError='',cardRead=0,purpose=[],replay=null,replayFrame=0,replayEpoch=0,disposed=false;
+      let cardSource=JSON.stringify([data.endpoint,data.processId,historyRevision]),cardConnection=data.connection,cardsDirty=true;
       function stopReplay(restore=false){const back=replay?.back;cancelAnimationFrame(replayFrame);replayFrame=0;replay=null;if(restore&&back){selected=back.selected;follow=back.follow;}}
       function replayStep(now){
         replayFrame=0;if(!replay||disposed||!visible)return;
@@ -41,7 +42,8 @@ export async function activate(ctx) {
         finally{if(!disposed&&request===historyRead){historyLoading=false;render();}}
       }
       async function loadCards(){
-        if(!visible)return;
+        if(!visible||data.connection!=='online')return;
+        cardsDirty=false;
         const request=++cardRead;cardsLoading=true;cardsError='';render();
         try{const got=await ctx.backend.call('cards');if(disposed||request!==cardRead)return;cards=got;}
         catch{if(!disposed&&request===cardRead)cardsError=l('Magpie has no saved allowance reading available.');}
@@ -102,7 +104,13 @@ export async function activate(ctx) {
       }
       const onUpdate=()=>{
         const nextHistoryRevision=data.historyRevision??historyRevision;
-        if(historyRevision!==nextHistoryRevision){historyRevision=nextHistoryRevision;stopReplay();historyRows=[];historyDays=[];tallies=[];historyWarning='';historyDirty=true;selected=null;if(kind==='page'){void loadHistory(historyDay,true);void loadCards();}}
+        if(historyRevision!==nextHistoryRevision){historyRevision=nextHistoryRevision;stopReplay();historyRows=[];historyDays=[];tallies=[];historyWarning='';historyDirty=true;selected=null;if(kind==='page')void loadHistory(historyDay,true);}
+        const nextCardSource=JSON.stringify([data.endpoint,data.processId,historyRevision]);
+        if(cardSource!==nextCardSource||cardConnection!==data.connection&&data.connection!=='online'){
+          cardRead++;cards=[];cardsError='';cardsLoading=false;cardsDirty=true;
+        }
+        cardSource=nextCardSource;cardConnection=data.connection;
+        if(kind==='page'&&cardsDirty)void loadCards();
         render();if(kind==='page'&&visible&&!historyDay&&!historyLoading&&!replay&&Date.now()-historyAt>15000&&data.routes.some(r=>r.done))void loadHistory('');};
       listeners.add(onUpdate); render();if(kind==='page'){void loadHistory('');void loadCards();}
       return { update(next) { const previous=visible;context = next; visible = next.visible !== false;if(!visible&&previous){historyRead++;cardRead++;historyLoading=false;cardsLoading=false;}if(replay){replay.at=performance.now();cancelAnimationFrame(replayFrame);if(visible&&!replay.paused)replayFrame=requestAnimationFrame(replayStep);} render();if(visible&&!previous&&kind==='page'){if(historyDirty||!historyDay)void loadHistory(historyDay,historyDirty);void loadCards();} }, dispose() {disposed=true;historyRead++;cardRead++;stopReplay(); languageObserver.disconnect(); listeners.delete(onUpdate); view.dispose(); } };

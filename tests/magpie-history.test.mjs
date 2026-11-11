@@ -172,6 +172,25 @@ test('pending allowance reads are canceled on endpoint change and hide, includin
   const third=backend.call('cards'),disposed=assert.rejects(third,/abort/i);backend.dispose();assert.equal(signal.aborted,true);await disposed;
 });
 
+test('gateway process changes cancel old pending allowances without changing history scope',async t=>{
+  const original=gateway.readJSON;t.after(()=>gateway.readJSON=original);
+  let pendingTrace,cardSignal,latest,seq=0,pid=100;
+  const trace=()=>({object:'trace',seq:++seq,pid,ids:[],routes:[],totals:{}});
+  gateway.readJSON=async(_port,endpoint,signal)=>{
+    if(endpoint==='/')return {name:'magpie'};
+    if(endpoint.includes('concurrency'))return {active:[]};
+    if(endpoint.includes('quotas/cards')){cardSignal=signal;return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));}
+    if(endpoint.endsWith('after=0'))return trace();
+    return new Promise((resolve,reject)=>{pendingTrace=resolve;signal.addEventListener('abort',()=>reject(signal.reason),{once:true});});
+  };
+  const backend=await require('../plugins/magpie-routes/backend.cjs').activate({host:{call:async()=>({revision:1,values:{port:54321}})},publish:s=>latest=s});t.after(()=>backend.dispose());
+  const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
+  backend.update({visible:true});await flush();assert.equal(latest.processId,100);
+  const pending=backend.call('cards'),rejected=assert.rejects(pending,/abort/i);
+  pid=101;pendingTrace(trace());await flush();assert.equal(cardSignal.aborted,true);await rejected;
+  assert.equal(latest.processId,101);assert.equal(latest.historyRevision,0);
+});
+
 for(const compressed of [false,true])test('history accepts complete EOF rows without double counting: '+(compressed?'gzip':'plain'),async t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-eof-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const file=path.join(dir,'2026-11-10.jsonl'+(compressed?'.gz':'')),record=id=>raw(id,{order:[{id:'a',kind:'account',provider:'codex',who:'測試@example.test',model:'gpt'}],tries:[{id:'a',model:'gpt',done:true,status:200}]}),text=id=>JSON.stringify(record(id));
