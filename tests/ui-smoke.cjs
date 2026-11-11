@@ -265,7 +265,11 @@ app.whenReady().then(async () => {
     const attempt={id:template.order[0].id,model:template.model,done:true,status:200};
     const failed={...attempt,status:429,fail:'rate'},rest={until:'2026-11-09T05:00:00.000Z',why:'rate'};
     historyFixtures['2026-11-09'].routes=[row(7,1,6000,'older-request',[failed,attempt]),row(8,2,9000,'middle-request',[attempt]),row(7,3,12000,'newer-request',[{...failed,rest},{...failed,rest},attempt])];
+    for(const r of historyFixtures['2026-11-09'].routes)r.agent=r.id===8?'codex':'claude';
     root.querySelectorAll('.rr-history-days button')[2].click();await new Promise(r=>setTimeout(r,80));
+    const agent=root.querySelector('.rr-filter'),choices=[...agent.options].map(o=>o.value),scopeAgents=!agent.hidden&&choices.includes('claude')&&choices.includes('codex');
+    agent.value='codex';agent.dispatchEvent(new Event('change'));const scopeFilter=root.querySelectorAll('.rr-request-detail').length===1&&root.querySelector('.rr-request-detail').textContent.includes('middle-request');
+    agent.value='';agent.dispatchEvent(new Event('change'));
     const reroutes=root.querySelector('.rr-stats').children[1].querySelector('dd').textContent;
     const older=[...root.querySelectorAll('.rr-request-detail')].find(row=>row.textContent.includes('older-request'));older.click();
     const selected=[...root.querySelectorAll('.rr-request-detail[aria-pressed="true"]')];
@@ -279,9 +283,19 @@ app.whenReady().then(async () => {
     for(let i=1;i<=8;i++){const batch=[...frames.values()];frames.clear();for(const fn of batch)fn(start+i*100);}
     const replay=root.querySelector('.rr-replay'),position=Number(replay.querySelector('input').value);
     const progress=!replay.hidden&&position>0&&position<1000;
-    replay.querySelector('[data-action="stop"]').click();document.querySelector('.rr-back-live').click();
+    replay.querySelector('[data-action="stop"]').click();
     window.requestAnimationFrame=originalRAF;window.cancelAnimationFrame=originalCancel;for(const fn of frames.values())originalRAF(fn);
-    return {history_composite_selection:composite,history_composite_spark:spark,scoped_reroutes_match_upstream_rest_events:reroutes==='2',incremental_replay_progress:progress,replay_position:position};
+    const stage=root.querySelector('.rr-stage').cloneNode(true);for(const node of stage.querySelectorAll('.rr-wires,.rr-sky'))node.remove();root.append(stage);
+    const {wireLayer}=await import('tm-plugin://magpie-routes/flight.mjs');
+    const layer=wireLayer(stage,()=>[...stage.querySelector('.rr-sources').children],stage.querySelector('.rr-hub'),()=>[...stage.querySelector('.rr-seats').children],()=>{});
+    const olderRoute=historyFixtures['2026-11-09'].routes[0],newerRoute={...structuredClone(historyFixtures['2026-11-09'].routes[2]),done:false,tries:[{...attempt,done:false}]};
+    const scene={visible:true,follow:true,reduced:false,replaying:true,replayEpoch:1,filter:'',data:{connection:'online',processId:1}};
+    const layout=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    layer.update({...scene,filtered:[olderRoute],staged:[olderRoute]});await layout();
+    layer.update({...scene,filtered:[olderRoute,newerRoute],staged:[newerRoute]});await layout();
+    const reusedFlight=layer.playing().size===1&&Boolean(stage.querySelector('.rr-packet'));
+    layer.dispose();stage.remove();document.querySelector('.rr-back-live').click();
+    return {history_composite_selection:composite,history_composite_spark:spark,scoped_reroutes_match_upstream_rest_events:reroutes==='2',incremental_replay_progress:progress,replay_position:position,history_agent_choices:scopeAgents,history_agent_filter:scopeFilter,reused_id_replay_flight:reusedFlight};
   })()`);
   console.log('Review regression proof:',JSON.stringify(reviewProof));
   for(const[name,passed]of Object.entries(reviewProof))if(name!=='replay_position')await win.webContents.executeJavaScript('check('+JSON.stringify(name)+','+JSON.stringify(passed)+')');

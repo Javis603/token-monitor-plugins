@@ -1,6 +1,6 @@
 import { svg } from './graphics.mjs';
 import { FLIER } from './flier.mjs';
-import { agentHue, seatKey, tried } from './model.mjs';
+import { agentHue, seatKey, tried, requestKey } from './model.mjs';
 
 // Magpie play/fly/pose/home, adapted to keyed Token Monitor surface nodes.
 // The original artwork, constant-distance flight, return flip, ±24° tilt,
@@ -13,7 +13,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
   const plays = new Map(), seen = new Set(), sourcePaths = new Map(), seatPaths = new Map();
   let value, frame = 0, layoutFrame = 0, disposed = false, bridge;
   const allowed = () => value?.visible && value.follow && !value.reduced && !reduced.matches && (value.replaying || value.data.connection === 'online');
-  const routeNow = id => value.filtered.find(route => route.id === id);
+  const routeNow = key => value.filtered.find(route => requestKey(route) === key);
   const failed = attempt => attempt.status >= 400 || attempt.fail;
   function bird() {
     const node = svg('g', { class: 'rr-flier' }); node.innerHTML = FLIER; sky.append(node); return node;
@@ -28,7 +28,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
     plays.clear(); sky.replaceChildren();
   }
   function finish(play) {
-    away(play); play.dot.remove(); plays.delete(play.id); seen.add(play.id);
+    away(play); play.dot.remove(); plays.delete(play.key); seen.add(play.key);
     queueMicrotask(() => { if (!disposed) finished(); });
   }
   function legsFor(play) {
@@ -78,7 +78,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
     play.dot.classList.remove('back', 'err'); start(play, 'outbound', fromHub ? 900 : 1400);
   }
   function advance(play) {
-    const route = routeNow(play.id);
+    const route = routeNow(play.key);
     if (!route) { finish(play); return; }
     if (play.phase === 'inbound') { away(play); start(play, 'hub', 0); }
     else if (play.phase === 'outbound') { away(play); start(play, 'held', 0); }
@@ -151,10 +151,11 @@ export function wireLayer(root, sources, hub, targets, finished) {
     }
     if (!allowed()) return;
     for (const route of value.staged) {
-      if (route.done || seen.has(route.id) || plays.has(route.id) || !sourcePaths.has(route.agent)) continue;
+      const key=requestKey(route);
+      if (route.done || seen.has(key) || plays.has(key) || !sourcePaths.has(route.agent)) continue;
       const dot = svg('circle',{r:root.classList.contains('rr-stage-small') ? 3 : 4.5,class:'rr-packet'});
       dot.style.setProperty('--rr-agent', agentHue(route.agent)); sky.append(dot);
-      const play = {id:route.id,agent:route.agent,index:0,dot,bird:null}; plays.set(route.id,play);
+      const play = {key,agent:route.agent,index:0,dot,bird:null}; plays.set(key,play);
       if (route.tries.length) outbound(play,route,false); else start(play,'inbound',620);
     }
     for (const play of [...plays.values()]) {
@@ -172,8 +173,8 @@ export function wireLayer(root, sources, hub, targets, finished) {
     update(next) {
       if (value && (value.data.processId !== next.data.processId || value.filter !== next.filter || value.follow !== next.follow || value.replaying !== next.replaying || value.replayEpoch !== next.replayEpoch || (value.clock != null && next.clock < value.clock))) { clear(); seen.clear(); }
       value = next;
-      const ids = new Set(next.filtered.map(route => route.id)); for (const id of seen) if (!ids.has(id)) seen.delete(id);
-      for (const route of next.filtered) if (route.done && !plays.has(route.id)) seen.add(route.id);
+      const ids = new Set(next.filtered.map(requestKey)); for (const id of seen) if (!ids.has(id)) seen.delete(id);
+      for (const route of next.filtered) if (route.done && !plays.has(requestKey(route))) seen.add(requestKey(route));
       root.classList.toggle('rr-paused',!allowed()); if (!allowed()) clear(); schedule();
     },
     dispose() { disposed = true; clear(); cancelAnimationFrame(layoutFrame); observer.disconnect(); root.removeEventListener('scroll',scroll,true); reduced.removeEventListener('change',motionChanged); }

@@ -55,9 +55,9 @@ export function tried(route, attempt) {
 export function stagedRoutes(routes, current, follow, now = Date.now(), playing = new Set()) {
   if (!current) return [];
   if (!follow) return [current];
-  const sorted = [...routes].sort((a,b) => a.id-b.id), last = new Map();
+  const sorted = [...routes].sort((a,b) => Date.parse(a.time)-Date.parse(b.time)||a.id-b.id), last = new Map();
   for (const route of sorted) last.set(route.agent,route);
-  const out = sorted.filter(route => !route.done || playing.has(route.id)
+  const out = sorted.filter(route => !route.done || playing.has(requestKey(route))
     || last.get(route.agent) === route && Date.parse(route.time)+(route.ms||0)>now-12000);
   if (!out.includes(current)) out.push(current);
   const agents = [...new Set(out.map(route => route.agent))].slice(-4);

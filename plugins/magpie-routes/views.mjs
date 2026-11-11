@@ -1,7 +1,7 @@
 import {l, locale, errorText} from './i18n.mjs';
 import { el, brand, button, paths } from './graphics.mjs';
 import { wireLayer } from './flight.mjs';
-import { agentName, agentHue, routeStatus, candidateState, affinityText, stagedRoutes, stageSeats, stageTree, seatKey } from './model.mjs';
+import { agentName, agentHue, routeStatus, candidateState, affinityText, stagedRoutes, stageSeats, stageTree, seatKey, requestKey } from './model.mjs';
 import { accountName, maskText, routeOutcome, routingDescription, seatNote, sourceModeName } from './story.mjs';
 import {createStory} from './story-view.mjs';
 import {createContextView} from './context.mjs';
@@ -20,7 +20,7 @@ function controls(actions, { agentFilter = true } = {}) {
   let agentKey = '';
   return { node, agent, update(value) {
     if (agent) {
-      const names = [...new Set(value.data.routes.map(route => route.agent))].sort(), key = names.join('\n');
+      const names = [...new Set(value.allRoutes.map(route => route.agent))].sort(), key = names.join('\n');
       if (key !== agentKey || !agent.childElementCount) {
         agentKey = key; const options = [['', l("全部 Agent")], ...names.map(id => [id, agentName(id)])];
         if (value.filter && !names.includes(value.filter)) options.push([value.filter, agentName(value.filter)]);
@@ -168,7 +168,7 @@ function routeStage(ctx,small = false) {
     node.setAttribute('aria-label',l("{p0} 個 Agent，{p1} 個帳號／模型節點",{p0:(agents.length),p1:(entries.length)}));
     lines.update({...next,staged});
     // Only wake for the 12s upstream linger boundary. Idle/held stages use no RAF loop.
-    const expires=staged.filter(route=>route.done&&!lines.playing().has(route.id)&&route.id!==next.route?.id).map(route=>Date.parse(route.time)+(route.ms||0)+12000-Date.now()).filter(ms=>ms>0);
+    const expires=staged.filter(route=>route.done&&!lines.playing().has(requestKey(route))&&requestKey(route)!==requestKey(next.route)).map(route=>Date.parse(route.time)+(route.ms||0)+12000-Date.now()).filter(ms=>ms>0);
     if(expires.length&&!next.replaying)timer=setTimeout(()=>{if(!disposed)update(value);},Math.min(...expires)+20);
     return {staged,seats:entries};
   }

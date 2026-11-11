@@ -19,6 +19,21 @@ test('history caps a day at latest 2000 and ignores symlink entries',async t=>{
   fs.symlinkSync(path.join(dir,'2026-11-10.jsonl'),path.join(dir,'2026-11-09.jsonl'));
   const got=await createHistory(dir)('2026-11-10');assert.equal(got.cut,true);assert.equal(got.routes.length,2000);assert.equal(got.routes[0].id,5);assert.equal(got.days.length,1);
 });
+test('history retains the newest recorded times across late writes and incremental appends',async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-late-history-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const newer=Array.from({length:2200},(_,i)=>raw(1000+i,{time:new Date(Date.UTC(2026,10,10,0,0,1000+i)).toISOString()}));
+  const older=Array.from({length:201},(_,i)=>raw(i,{time:new Date(Date.UTC(2026,10,10,0,0,i)).toISOString()}));
+  const text=[...newer,...older].map(r=>JSON.stringify(r)).join('\n')+'\n',file=path.join(dir,'2026-11-10.jsonl'),history=createHistory(dir);
+  fs.writeFileSync(file,text);fs.writeFileSync(path.join(dir,'2026-11-09.jsonl.gz'),zlib.gzipSync(text));
+  const expected=newer.slice(-2000).map(r=>r.id);
+  assert.deepEqual((await history('2026-11-10')).routes.map(r=>r.id),expected);
+  assert.deepEqual((await history('2026-11-09')).routes.map(r=>r.id),expected);
+  // Re-read the plain day, then append late old records before one new record.
+  await history('2026-11-10');fs.appendFileSync(file,older.map(r=>JSON.stringify(r)).join('\n')+'\n');
+  assert.deepEqual((await history('2026-11-10')).routes.map(r=>r.id),expected);
+  fs.appendFileSync(file,JSON.stringify(raw(9999,{time:'2026-11-10T23:00:00.000Z'}))+'\n');
+  assert.deepEqual((await history('2026-11-10')).routes.map(r=>r.id),[...expected.slice(1),9999]);
+});
 test('quota-card allowlist excludes credentials, private extensions and URL actions',()=>{
   const got=gateway.cards({data:[{provider:'codex',user:'account@example.test',accessToken:'secret',refreshToken:'secret',seeAt:'https://secret.test',windows:[{name:'Weekly',used:54,resetsAt:'2026-11-12T00:00:00Z',balance:12,runsOut:3,runsOutAt:'2026-11-11T00:00:00Z',key:'secret',body:'secret'}]}]});
   assert.equal(got[0].windows[0].balance,12);assert.equal(got[0].windows[0].runsOut,3);assert.equal(JSON.stringify(got).includes('secret'),false);

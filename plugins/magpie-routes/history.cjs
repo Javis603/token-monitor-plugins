@@ -6,6 +6,7 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 const { route } = require('./gateway.cjs');
 const validDay = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day+'T12:00:00Z')) && new Date(day+'T12:00:00Z').toISOString().slice(0,10) === day;
+const byTime=(a,b)=>Date.parse(a.time)-Date.parse(b.time)||a.id-b.id;
 function createHistory(directory,signal,clock=()=>new Date()) {
   const cache=new Map();
   async function read(file, stat, keep, tally) {
@@ -30,7 +31,7 @@ function createHistory(directory,signal,clock=()=>new Date()) {
           count++;
           if(keep||tally){
             let row;try{const raw=JSON.parse(line);raw.order ||= [];raw.tries ||= [];row=route(raw);}catch{continue;}
-            if(keep){rows.push(row);if(rows.length>2200)rows.splice(0,200);}
+            if(keep){rows.push(row);if(rows.length>2200){rows.sort(byTime);rows.splice(0,rows.length-2000);}}
             if(tally){
               const key=w=>w.kind==='account'&&w.who?JSON.stringify([w.provider,w.who.trim().toLowerCase()]):w.id;
               for(const w of row.order){const k=key(w);if(!tallies.has(k))tallies.set(k,{key:k,candidate:w,at:Date.parse(row.time)||0,tried:0,ok:0,failed:0,models:[]});const a=tallies.get(k);if((Date.parse(row.time)||0)>=a.at){a.candidate=w;a.at=Date.parse(row.time)||0;}}
@@ -62,7 +63,7 @@ function createHistory(directory,signal,clock=()=>new Date()) {
     }
     for(const file of cache.keys())if(!files.includes(path.basename(file)))cache.delete(file);
     const unique=new Map();for(const row of routes)unique.set(row.id+'\0'+row.time,row);
-    const sorted=[...unique.values()].sort((a,b)=>Date.parse(a.time)-Date.parse(b.time)||a.id-b.id);
+    const sorted=[...unique.values()].sort(byTime);
     return {days:[...days].sort(([a],[b])=>b.localeCompare(a)).map(([day,requests])=>({day,requests})),routes:sorted.slice(-2000),cut:total>2000,tallies:[...tallies.values()]};
   };
 }
