@@ -7,7 +7,7 @@ export function replayPlan(rows){
   const end=r=>Math.max(start(r)+(r.ms||0),...r.tries.map(tr=>at(tr,r)+(tr.ms||0)));
   const ts=[...new Set(list.flatMap(r=>[start(r),end(r),...r.tries.flatMap(tr=>[at(tr,r),at(tr,r)+(tr.ms||0)])]))].sort((a,b)=>a-b),vs=[];
   let v=0;ts.forEach((t,i)=>{if(i)v+=Math.min(t-ts[i-1],1800);vs.push(v);});
-  const virtual=t=>vs[ts.indexOf(t)];
+  const times=new Map(ts.map((t,i)=>[t,vs[i]])),virtual=t=>times.get(t);
   return {ts,vs,total:v,rows:list.map(r=>({
     route:r,start:virtual(start(r)),end:virtual(end(r)),
     tries:r.tries.map(tr=>({start:virtual(at(tr,r)),end:virtual(at(tr,r)+(tr.ms||0))}))

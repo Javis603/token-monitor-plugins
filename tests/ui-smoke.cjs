@@ -194,6 +194,16 @@ app.whenReady().then(async () => {
     branches[1].firstChild.click();check('stage-nested-key-pool-expands-in-place',root.querySelectorAll('.rr-seat').length===3);
     branches[0].firstChild.click();check('stage-nested-group-folds-whole-subtree',root.querySelectorAll('.rr-branch').length===1&&root.querySelectorAll('.rr-seat').length===0);
   })()`);
+  await win.webContents.executeJavaScript(`(()=>{
+    const root=document.getElementById('surface'),template=structuredClone(groupedFixture.routes[0]);
+    window.poolFixture={...structuredClone(groupedFixture),routes:['A','B'].map((group,i)=>({...structuredClone(template),id:70+i,provider:'group',model:'group/'+group,group:{id:group,name:'Team '+group,routing:'order'},order:Array.from({length:3},(_,n)=>({...structuredClone(template.order[0]),id:group+n,provider:'codex',model:'gpt-5',who:'demo-'+group+n+'@example.test',kind:'account',via:[]})),tries:[]}))};
+    pushMagpie(poolFixture);
+    const pools=()=>[...root.querySelectorAll('.rr-branch')].filter(n=>n.querySelector('.rr-branch-toggle code')?.textContent==='gpt-5');
+    check('account-pools-start-independently-expanded',pools().length===2&&root.querySelectorAll('.rr-seat').length===6);
+    pools()[0].querySelector('.rr-branch-toggle').click();
+    check('folding-one-pool-keeps-other-group-expanded',root.querySelectorAll('.rr-seat').length===3&&pools()[1].querySelector('.rr-branch-toggle').getAttribute('aria-expanded')==='true');
+    pushMagpie(structuredClone(poolFixture));check('pool-fold-persists-without-affecting-other-group',root.querySelectorAll('.rr-seat').length===3);
+  })()`);
   await win.webContents.executeJavaScript(`(async()=>{
     const root=document.getElementById('surface'),template=structuredClone(sparkRestore.routes[0]),now=Date.now();
     const row=(id,session,change={})=>({...structuredClone(template),id,time:new Date(now-(105-id)*30000).toISOString(),agent:'t3code',sessionKey:session,callerKey:'office-key-id',callerKeyName:'Office',kind:'',done:true,status:200,ms:6000,ttft:1000,flow:5000,out:1000,tokens:(105-id)*10000,tries:[{id:template.order[0].id,model:template.model,done:true,status:200,start:new Date(now-(105-id)*30000).toISOString(),ms:6000}],usage:[{in:20,out:1000,cache_read:60,cache_write:20,credits:1.5}],order:template.order.map(w=>({...w,kind:'account',name:'Codex',who:w.name,plan:'Plus',known:true})),...change});

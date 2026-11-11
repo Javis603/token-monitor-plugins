@@ -230,3 +230,17 @@ test('stage row words consume safe live counters, intent, wallet and restriction
   assert.match(note({tries:[],rule:null},{noURL:'responses'}),/no OpenAI Responses URL/);
   assert.match(note({tries:[],rule:null}),/all but used up/);
 });
+
+test('account pools fold independently across routing groups and nested paths',async()=>{
+  const {stageSeats,stageTree}=await import('../plugins/magpie-routes/model.mjs');
+  for(const nested of [false,true]){
+    const routes=['A','B'].map((group,i)=>({id:i+1,provider:'group',model:'group/'+group,group:{id:group,name:'Team '+group,subs:[{id:'nested-'+group,name:'Nested '+group}]},order:Array.from({length:3},(_,n)=>({id:group+n,kind:'account',provider:'codex',model:'gpt-5',via:nested?['nested-'+group]:[]}))}));
+    const entries=stageSeats(routes),initial=stageTree(entries),pools=initial.filter(n=>n.poolKind);
+    assert.equal(pools.length,2);assert.notEqual(pools[0].persistKey,pools[1].persistKey);assert.deepEqual(pools.map(p=>p.open),[true,true]);
+    const expanded=new Map([[pools[0].persistKey,false]]),folded=stageTree(entries,expanded);
+    assert.deepEqual(folded.filter(n=>n.poolKind).map(p=>p.open),[false,true]);assert.equal(folded.filter(n=>n.type==='seat').length,3);
+    assert.deepEqual(stageTree(stageSeats(structuredClone(routes)),expanded).filter(n=>n.poolKind).map(p=>p.open),[false,true]);
+    expanded.set(pools[1].persistKey,false);expanded.set(pools[0].persistKey,true);
+    assert.deepEqual(stageTree(entries,expanded).filter(n=>n.poolKind).map(p=>p.open),[true,false]);
+  }
+});

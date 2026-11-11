@@ -135,7 +135,7 @@ export function stageTree(entries, expanded = new Map()) {
       const foldKey = c => JSON.stringify([c.kind,c.provider,c.model||'',c.fixed||'',!!c.fallback,!!c.aside]);
       let end=i+1;
       if(w && ['account','key'].includes(w.kind)) while(end<parent.children.length && parent.children[end].type==='seat' && foldKey(parent.children[end].candidate)===foldKey(w)) end++;
-      if(end-i>=3) children.push({type:'header',key:JSON.stringify([...(parent.path||[]),['pool',foldKey(w)]]),poolKind:w.kind,name:w.name||w.provider,ref:w.model+(w.fixed?':'+w.fixed:''),icon:w.icon||w.preset||w.provider,mode:w.routing||'',persistKey:'pool/'+foldKey(w),defaultOpen:w.kind==='account'&&end-i<6,children:parent.children.slice(i,end)});
+      if(end-i>=3) children.push({type:'header',key:JSON.stringify([...(parent.path||[]),['pool',foldKey(w)]]),poolKind:w.kind,name:w.name||w.provider,ref:w.model+(w.fixed?':'+w.fixed:''),icon:w.icon||w.preset||w.provider,mode:w.routing||'',persistKey:'pool/'+JSON.stringify([...(parent.path||[]),foldKey(w)]),defaultOpen:w.kind==='account'&&end-i<6,children:parent.children.slice(i,end)});
       else children.push(...parent.children.slice(i,end));
       i=end;
     }
