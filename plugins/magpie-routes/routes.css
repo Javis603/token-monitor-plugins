@@ -198,6 +198,7 @@
 .rr-packet.held { animation:rr-held 1.2s ease-in-out infinite; }
 .rr-paused .rr-sky { display:none; }
 .rr-paused .rr-wires path.live,.rr-hidden .rr-wires path,.rr-reduced .rr-wires path { animation:none; }
+.rr-replay-paused .rr-sky *,.rr-replay-paused .rr-wires path.live,.rr-replay-paused .rr-seat-dot { animation-play-state:paused; }
 .rr-offline { opacity:.7; }
 @keyframes rr-flow { to { stroke-dashoffset:-8; } }
 @keyframes rr-live { 0% { box-shadow:0 0 0 0 color-mix(in srgb,var(--rr-ink) 40%,transparent); } 70%,100% { box-shadow:0 0 0 6px transparent; } }

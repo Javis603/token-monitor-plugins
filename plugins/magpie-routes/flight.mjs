@@ -11,7 +11,7 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
   root.prepend(wires); root.append(sky);
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const plays = new Map(), seen = new Set(), sourcePaths = new Map(), seatPaths = new Map();
-  let value, frame = 0, layoutFrame = 0, disposed = false, bridge;
+  let value, frame = 0, layoutFrame = 0, disposed = false, bridge, pausedAt = null;
   const allowed = () => value?.visible && value.follow && !value.reduced && !reduced.matches && (value.replaying || value.data.connection === 'online');
   const routeNow = key => value.filtered.find(route => requestKey(route) === key);
   const failed = attempt => attempt.status >= 400 || attempt.fail;
@@ -25,6 +25,7 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
   }
   function clear() {
     cancelAnimationFrame(frame); frame = 0;
+    for(const animation of sky.getAnimations({subtree:true}))animation.cancel();
     plays.clear(); sky.replaceChildren();
   }
   function finish(play) {
@@ -67,7 +68,7 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
     play.bird.setAttribute('transform', `translate(${p.x} ${p.y}) scale(${flip ? -scale : scale} ${scale}) rotate(${play.angle})`);
   }
   function start(play, phase, ms) {
-    play.phase = phase; play.started = performance.now(); play.ms = ms;
+    play.phase = phase; play.started = pausedAt??performance.now(); play.ms = ms;
     play.dot.classList.toggle('held', phase === 'held' || phase === 'hub');
     play.dot.dataset.phase = phase;
     if (ms && !play.bird) play.bird = bird();
@@ -98,13 +99,14 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
   }
   function tick(now) {
     frame = 0;
+    if(pausedAt!==null)return;
     for (const play of [...plays.values()]) if (play.ms) {
       const progress = Math.min(1, (now - play.started) / play.ms); pose(play, progress);
       if (progress === 1) { play.ms = 0; advance(play); }
     }
     kick();
   }
-  function kick() { if (!frame && allowed() && [...plays.values()].some(play => play.ms)) frame = requestAnimationFrame(tick); }
+  function kick() { if (!frame && pausedAt===null && allowed() && [...plays.values()].some(play => play.ms)) frame = requestAnimationFrame(tick); }
   function draw() {
     layoutFrame = 0; if (disposed || !value?.visible) return;
     const width = root.clientWidth, height = root.clientHeight; if (!width || !height) return;
@@ -160,7 +162,7 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
     }
     for (const play of [...plays.values()]) {
       play.dot.style.setProperty('--rr-agent',agentHue(play.agent));
-      if (!play.ms) { pose(play,1); advance(play); }
+      if (!play.ms) { pose(play,1); if(pausedAt===null)advance(play); }
     }
     kick();
   }
@@ -174,6 +176,18 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
     update(next) {
       if (value && (value.data.processId !== next.data.processId || value.filter !== next.filter || value.follow !== next.follow || value.replaying !== next.replaying || value.replayEpoch !== next.replayEpoch || (value.clock != null && next.clock < value.clock))) { clear(); seen.clear(); }
       value = next;
+      const paused=next.replay?.paused===true,now=performance.now();
+      if(paused&&pausedAt===null){pausedAt=now;cancelAnimationFrame(frame);frame=0;}
+      else if(!paused&&pausedAt!==null){
+        // Exclude the pause from each flight's elapsed wall-clock time.
+        for(const play of plays.values())if(play.ms)play.started+=now-pausedAt;
+        pausedAt=null;
+      }
+      root.classList.toggle('rr-replay-paused',paused);
+      for(const animation of sky.getAnimations({subtree:true})){
+        if(paused&&animation.playState==='running')animation.pause();
+        else if(!paused&&animation.playState==='paused')animation.play();
+      }
       const ids = new Set(next.filtered.map(requestKey)); for (const id of seen) if (!ids.has(id)) seen.delete(id);
       for (const route of next.filtered) if (route.done && !plays.has(requestKey(route))) seen.add(requestKey(route));
       root.classList.toggle('rr-paused',!allowed()); if (!allowed()) clear(); schedule();
