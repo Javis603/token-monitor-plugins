@@ -34,6 +34,7 @@ export function liveLabel(r,now=Date.now()){
   return parts.join(' · ');
 }
 export function requestMetrics(r){
+  const priced=r.priced&&Number.isFinite(r.cost);
   const cache=r.done?promptTotals([r]):{prompt:0,read:0},good=routeSucceeded(r);
   const decode=good?decodeOf(r):null,floor=good&&!decode?floorOf(r):null;
   const credited=(r.usage||[]).filter(u=>u.credits!=null),credits=credited.length?t('{n} credits',{n:countFormat.format(credited.reduce((n,u)=>n+u.credits,0))}):'';
@@ -43,7 +44,7 @@ export function requestMetrics(r){
     tokens:{label:'Tokens',value:r.tokens?short(r.tokens):'',number:r.tokens||0},
     cache:{label:'Cache hit rate',value:cache.prompt?hitPct(cache.read/cache.prompt):'',number:cache.prompt?cache.read/cache.prompt:NaN},
     speed:{label:'Output speed',value:decode||floor?(floor?'≥':'')+t('{n} tok/s',{n:Math.round((decode||floor).n*1000/(decode||floor).w)}):'',number:decode?decode.n*1000/decode.w:floor?floor.n*1000/floor.w:NaN},
-    cost:{label:'Cost',value:[r.priced?'≈'+fmtCost({cost:r.cost||0,unpriced:r.unpriced||0}):'',credits].filter(Boolean).join(' · '),number:r.priced?r.cost:NaN}
+    cost:{label:'Cost',value:[priced?'≈'+fmtCost({cost:r.cost,unpriced:r.unpriced||0}):'',credits].filter(Boolean).join(' · '),number:priced?r.cost:NaN}
   };
 }
 export function groupRequests(rows,by){
@@ -113,6 +114,10 @@ export function createRequests(ctx,actions,sessionNumbers){
   function metricNode({label,value}){const n=el('span','rr-request-metric');n.append(el('span','k',t(label)),el('span','v',value));return n;}
   function render(){
     if(!value?.visible)return;
+    const priced=value.filtered.some(r=>r.priced&&Number.isFinite(r.cost)),costAvailable=priced||value.filtered.some(r=>r.usage?.some(u=>u.credits!=null));
+    const costOption=sorting.querySelector('option[value="cost"]');costOption.hidden=costOption.disabled=!priced;
+    const costToggle=metricPick.querySelector('input[data-metric="cost"]');costToggle.parentElement.hidden=!costAvailable;costToggle.disabled=!costAvailable;
+    if(sort==='cost'&&!priced)sort='newest';sorting.value=sort;
     // A kept day is immutable while unrelated live requests arrive. Preserve
     // its DOM and scroll/focus, instead of repainting up to 2000 rows per tick.
     const key=JSON.stringify([by,sort,metrics,[...folded],allAccounts,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,[...new Set(value.allRoutes.map(requestPurpose))],value.filtered.some(r=>!r.done)?Math.floor(Date.now()/1000):0]);
@@ -142,7 +147,7 @@ export function createRequests(ctx,actions,sessionNumbers){
         const count=g.rows.length,{prompt,read}=promptTotals(g.rows.filter(r=>r.done));let totalN=0,totalW=0;for(const r of g.rows)if(routeSucceeded(r)){const d=decodeOf(r);if(d){totalN+=d.n;totalW+=d.w;}}
         b.append(el('strong','',by==='key'?(g.route.callerKeyName||(g.route.callerKey?t('Gateway key'):t('No gateway key'))):g.route.sessionKey?agentName(g.route.agent)+' · '+t('Session {n}',{n:sessionNumbers.get(g.route.agent+' '+g.route.sessionKey)}):t('No session ID')),el('span','',t('{n} requests',{n:count})+' · '+short(g.rows.reduce((sum,r)=>sum+(r.tokens||0),0))+' '+t('tokens')));
         if((by==='key'||g.route.sessionKey)&&prompt&&metrics.includes('cache'))b.append(metricNode({label:'Avg. cache',value:hitPct(read/prompt)}));if((by==='key'||g.route.sessionKey)&&totalW&&metrics.includes('speed'))b.append(metricNode({label:'Avg. speed',value:t('{n} tok/s',{n:Math.round(totalN*1000/totalW)})}));
-        if(metrics.includes('cost')){const priced=g.rows.filter(r=>r.priced),credited=g.rows.flatMap(r=>(r.usage||[]).filter(u=>u.credits!=null));const cost=[priced.length?'≈'+fmtCost({cost:priced.reduce((n,r)=>n+(r.cost||0),0),unpriced:g.rows.some(r=>!r.priced||r.unpriced)?1:0}):'',credited.length?t('{n} credits',{n:countFormat.format(credited.reduce((n,u)=>n+u.credits,0))}):''].filter(Boolean).join(' · ');if(cost)b.append(metricNode({label:'Cost',value:cost}));}
+        if(metrics.includes('cost')){const priced=g.rows.filter(r=>r.priced&&Number.isFinite(r.cost)),credited=g.rows.flatMap(r=>(r.usage||[]).filter(u=>u.credits!=null));const cost=[priced.length?'≈'+fmtCost({cost:priced.reduce((n,r)=>n+(r.cost||0),0),unpriced:g.rows.some(r=>!r.priced||r.unpriced)?1:0}):'',credited.length?t('{n} credits',{n:countFormat.format(credited.reduce((n,u)=>n+u.credits,0))}):''].filter(Boolean).join(' · ');if(cost)b.append(metricNode({label:'Cost',value:cost}));}
         visible.push(b);
       }
       if(by!=='request'&&folded.has(g.key))continue;

@@ -212,6 +212,12 @@ app.whenReady().then(async () => {
     document.querySelector('.rr-back-live').click();
     check('requests-show-live-reply-counters',root.querySelector('.rr-request-live').textContent.includes('61.9 KiB'));
     check('requests-show-metrics-and-reported-credits',root.querySelectorAll('.rr-request-detail [data-metric="cache"]').length>0&&root.querySelectorAll('.rr-request-detail [data-metric="cost"]').length>0);
+    check('unpriced-usd-sort-is-unavailable',root.querySelector('option[value="cost"]').disabled);
+    const costRows=structuredClone(readonlyFixture);for(const r of costRows.routes)r.usage=[];pushMagpie(costRows);
+    check('cost-metric-hidden-without-price-or-credits',root.querySelector('input[data-metric="cost"]').parentElement.hidden);
+    costRows.routes[1].priced=true;costRows.routes[1].cost=0;pushMagpie(structuredClone(costRows));
+    check('reported-zero-price-is-valid',!root.querySelector('option[value="cost"]').disabled&&!root.querySelector('input[data-metric="cost"]').parentElement.hidden);
+    pushMagpie(structuredClone(readonlyFixture));
     check('accounts-show-allowance-windows-and-wallet-expiry',root.querySelector('.rr-account-list').textContent.includes('25 USD')&&root.querySelector('.rr-account-list').textContent.includes('5 USD'));
     check('accounts-retain-mask-for-live-readings',[...root.querySelectorAll('.rr-account-summary > strong .rr-pii')].every(n=>getComputedStyle(n).filter.includes('blur')));
     root.querySelector('[data-group-by="session"]').click();check('requests-group-by-session',root.querySelectorAll('.rr-request-group').length===3);
@@ -236,6 +242,12 @@ app.whenReady().then(async () => {
     root.querySelectorAll('.rr-history-days button')[2].click();await new Promise(r=>setTimeout(r,80));
     check('history-day-loads-own-records',root.querySelectorAll('.rr-request-detail').length===4&&root.querySelector('.ctx-crumbs').textContent.includes('#903'));
     check('history-day-hides-live-session-strip',root.querySelector('.rr-context-sessions').hidden);
+    historyFixtures['2026-11-09'].unavailableDays=['2026-11-08'];root.querySelectorAll('.rr-history-days button')[2].click();await new Promise(r=>setTimeout(r,80));
+    check('partial-history-warning-retains-healthy-records',root.querySelector('.rr-notice').textContent.includes('2026-11-08')&&root.querySelectorAll('.rr-request-detail').length===4);
+    delete historyFixtures['2026-11-09'].unavailableDays;
+    historyFixtures['2026-11-09'].routes=historyPast.map(r=>({...r,id:r.id+1000}));pushMagpie({...structuredClone(readonlyFixture),historyRevision:1});await new Promise(r=>setTimeout(r,80));
+    check('data-directory-change-reloads-selected-history',root.querySelector('.ctx-crumbs').textContent.includes('#1903')&&!root.querySelector('.rr-notice').textContent.includes('2026-11-08'));
+    historyFixtures['2026-11-09'].routes=historyPast;pushMagpie({...structuredClone(readonlyFixture),historyRevision:2});await new Promise(r=>setTimeout(r,80));
     const keptTitle=root.querySelector('.rr-request-detail').firstChild;pushMagpie(structuredClone(readonlyFixture));check('history-does-not-repaint-for-unrelated-live-updates',root.querySelector('.rr-request-detail').firstChild===keptTitle);
     root.querySelector('[data-action="replay"]').click();await new Promise(r=>setTimeout(r,80));
     check('replay-starts-with-control-bar',!root.querySelector('.rr-replay').hidden);

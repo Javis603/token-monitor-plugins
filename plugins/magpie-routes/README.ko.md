@@ -44,6 +44,8 @@ Token Monitor에서 로컬 Magpie의 실시간 라우팅, 컨텍스트 요약, �
 
 기본 페이지는 동시 세션 컨텍스트, 요청／세션／키별 그룹화, 용도 필터와 지표도 제공합니다. 날짜별 기록과 재생에는 Magpie의 기존 로컬 기록을, 사용량에는 저장된 카드 API를 읽습니다. 기록을 수정하거나 공급자에 사용량 갱신을 요청하거나 계정 설정을 변경하지 않습니다. 세션은 익명 번호로 표시하며 요청 본문이나 프롬프트에서 만든 제목은 읽지 않습니다.
 
+포터블 버전이나 사용자 지정 데이터 폴더를 쓰는 경우 플러그인 설정의 **Magpie data directory**에 settings.json 및 routing/을 포함하는 폴더의 절대 경로를 입력하세요. 비워 두면 기본 위치를 사용합니다. USD 가격이 없으면 비용 정렬을 숨기며 보고된 credits는 표시합니다. 손상된 압축 기록은 건너뛰고 기록이 불완전할 수 있음을 알립니다.
+
 ## 라이선스 및 유지 관리
 
 Token Monitor 커뮤니티 통합이며 **Magpie 공식 제품이 아닙니다**. 일부 코드와 이미지는 [yetone/magpie](https://github.com/yetone/magpie)를 기반으로 합니다. 원본 코드는 [MIT](LICENSE)이며 업스트림 출처와 라이선스는 [SOURCE-NOTICE.md](SOURCE-NOTICE.md) 및 [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt)에 있습니다.

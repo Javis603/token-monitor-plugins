@@ -6,12 +6,17 @@ const path=require('node:path');
 exports.activate = async ({ host, publish }) => {
   let settings = await host.call('settings.get'), values = settings.values;
   const lifetime=new AbortController();
-  const history=createHistory(path.join(gateway.configDirectory(),'routing'),lifetime.signal);
+  let history,historyDirectory;
+  function readHistory(day){
+    const directory=gateway.configDirectory(values.dataDirectory);
+    if(directory!==historyDirectory){historyDirectory=directory;history=createHistory(path.join(directory,'routing'),lifetime.signal);}
+    return history(day);
+  }
   let maskWrites = Promise.resolve();
   let disposed = false, generation = 0, controller, retryTimer, laneTimer;
   let routes = new Map(), seq = 0, pid = null;
   let state = { connection: 'connecting', error: '', endpoint: '', version: '', updatedAt: null,
-    totals: { requests: 0, rerouted: 0, errors: 0 }, active: [], activityAvailable: false, routes: [], maskAccounts: values.maskAccounts, lifted: {} };
+    totals: { requests: 0, rerouted: 0, errors: 0 }, active: [], activityAvailable: false, routes: [], maskAccounts: values.maskAccounts, lifted: {},historyRevision:0 };
   const snapshot = () => ({ ...state, routes: [...routes.values()].sort((a, b) => b.id - a.id) });
   const emit = () => { if (!disposed) publish(snapshot()); };
   const current = run => !disposed && run === generation;
@@ -26,7 +31,7 @@ exports.activate = async ({ host, publish }) => {
     state = { ...state, connection: 'connecting', error: '', maskAccounts: values.maskAccounts, activityAvailable: false };
     emit();
     try {
-      const port = gateway.detectPort(values.port);
+      const port = gateway.detectPort(values.port,values.dataDirectory);
       state.endpoint = `127.0.0.1:${port}`;
       const hello = await gateway.readJSON(port, '/', signal, 5000);
       if (hello.name !== 'magpie') throw new Error('此連接埠不是 Magpie gateway，請檢查插件設定。');
@@ -75,7 +80,8 @@ exports.activate = async ({ host, publish }) => {
     if (next.revision < settings.revision) return;
     const previous = values; settings = next; values = next.values;
     state.maskAccounts = values.maskAccounts;
-    if (previous.port !== values.port) void start(); else emit();
+    if(previous.dataDirectory!==values.dataDirectory)state.historyRevision++;
+    if (previous.port !== values.port||previous.dataDirectory!==values.dataDirectory) void start(); else emit();
   }
   function toggleMask() {
     // All renderer windows share this queue and the host's persisted setting.
@@ -96,10 +102,10 @@ exports.activate = async ({ host, publish }) => {
     call(method,params) {
       if (method === 'toggleMask') return toggleMask();
       if (method === 'snapshot') return snapshot();
-      if (method === 'history') return history(params?.day??'');
+      if (method === 'history') return readHistory(params?.day??'');
       if (method === 'cards') {
         if(disposed)return [];
-        const signal=controller?.signal,port=gateway.detectPort(values.port);
+        const signal=controller?.signal,port=gateway.detectPort(values.port,values.dataDirectory);
         return gateway.readJSON(port,'/v1/magpie/quotas/cards',signal,5000).then(gateway.cards);
       }
       if (method === 'reconnect') { void start(); return snapshot(); }

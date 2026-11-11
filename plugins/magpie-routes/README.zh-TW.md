@@ -44,6 +44,8 @@
 
 主頁亦提供多會話上下文、按請求／會話／金鑰分組、用途篩選及指標。歷史日瀏覽與重播讀取 Magpie 既有的本機路由資料夾，帳號用量視窗來自已儲存的用量卡片接口；不改寫歷史、不向供應商刷新用量，亦不修改帳號設定。會話使用匿名編號，不載入請求正文或由提示詞產生的標題。
 
+Magpie 使用可攜版或自訂資料夾時，請將「Magpie 資料目錄」設為絕對路徑，指向內含 settings.json 及 routing/ 的資料夾；留空使用標準位置。沒有定價資料時隱藏美元成本排序，保留實際回報的 credits。損壞的壓縮歷史會略過，並提示紀錄可能不完整。
+
 ## 授權與維護
 
 Token Monitor 社群整合，**並非 Magpie 官方產品**。部分程式與圖像改編自 [yetone/magpie](https://github.com/yetone/magpie)。原創程式採 [MIT](LICENSE)，上游來源與授權詳見 [SOURCE-NOTICE.md](SOURCE-NOTICE.md) 及 [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt)。

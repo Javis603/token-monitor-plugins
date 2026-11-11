@@ -734,7 +734,9 @@ export default {
     "Wallet": "Wallet",
     "left": "left",
     "Gateway key": "Gateway key",
-    "as of {time}": "as of {time}"
+    "as of {time}": "as of {time}",
+    "Some history files could not be read. Dates and totals may be incomplete: {days}": "Some history files could not be read. Dates and totals may be incomplete: {days}",
+    "Magpie data directory must be an absolute path.": "Magpie data directory must be an absolute path."
   },
   "zh-TW": {
     "Subagent": "子代理",
@@ -1471,7 +1473,9 @@ export default {
     "Wallet": "錢包",
     "left": "剩餘",
     "Gateway key": "閘道金鑰",
-    "as of {time}": "截至 {time}"
+    "as of {time}": "截至 {time}",
+    "Some history files could not be read. Dates and totals may be incomplete: {days}": "部分歷史檔案無法讀取，日期及統計可能不完整：{days}",
+    "Magpie data directory must be an absolute path.": "Magpie 資料目錄必須填寫絕對路徑。"
   },
   "zh-CN": {
     "Subagent": "子代理",
@@ -2208,6 +2212,8 @@ export default {
     "Wallet": "钱包",
     "left": "剩余",
     "Gateway key": "网关密钥",
-    "as of {time}": "截至 {time}"
+    "as of {time}": "截至 {time}",
+    "Some history files could not be read. Dates and totals may be incomplete: {days}": "部分历史文件无法读取，日期和统计可能不完整：{days}",
+    "Magpie data directory must be an absolute path.": "Magpie 数据目录必须填写绝对路径。"
   }
 };

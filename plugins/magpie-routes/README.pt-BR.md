@@ -44,6 +44,8 @@ A ocultação das contas afeta apenas a exibição. Os metadados podem conter no
 
 A página principal também oferece contexto por sessão, agrupamento por requisição/sessão/chave, filtros de finalidade e métricas. O histórico diário e a reprodução leem os arquivos locais existentes do Magpie; as cotas vêm da API de cartões já salvos. Essas leituras não reescrevem o histórico, não atualizam cotas junto aos fornecedores e não alteram contas. As sessões usam números anônimos, sem carregar corpos de requisições nem títulos derivados de prompts.
 
+Para uma instalação portátil ou uma pasta de dados personalizada, informe em **Magpie data directory** o caminho absoluto da pasta que contém settings.json e routing/. Deixe vazio para usar o local padrão. A ordenação por custo em USD fica oculta quando não há preços; os credits informados continuam visíveis. Arquivos de histórico compactados e danificados são ignorados com um aviso de histórico incompleto.
+
 ## Licença e manutenção
 
 Integração da comunidade Token Monitor, **não é um produto oficial do Magpie**. Parte do código e das imagens adapta [yetone/magpie](https://github.com/yetone/magpie). O código original usa [MIT](LICENSE); a atribuição e a licença upstream estão em [SOURCE-NOTICE.md](SOURCE-NOTICE.md) e [MAGPIE-LICENSE.txt](MAGPIE-LICENSE.txt).

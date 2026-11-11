@@ -52,11 +52,15 @@ function createHistory(directory,signal,clock=()=>new Date()) {
     const files=names.filter(name=>/^\d{4}-\d{2}-\d{2}\.jsonl(?:\.gz)?$/.test(name)&&validDay(name.slice(0,10))).sort();
     for(const[file,entry]of cache)if(path.basename(file).slice(0,10)!==day)delete entry.rows;
     const todayDate=clock(),today=todayDate.getFullYear()+'-'+String(todayDate.getMonth()+1).padStart(2,'0')+'-'+String(todayDate.getDate()).padStart(2,'0');
-    const days=new Map(),routes=[],tallies=new Map();let total=0;
+    const days=new Map(),routes=[],tallies=new Map(),unavailableDays=new Set();let total=0;
     for(const name of files){
       const file=path.join(directory,name);let stat;try{stat=await fs.promises.lstat(file);}catch(error){if(error.code==='ENOENT')continue;throw error;}
       if(!stat.isFile()||stat.isSymbolicLink())continue;
-      const date=name.slice(0,10);let got;try{got=await read(file,stat,date===day,date===today);}catch(error){if(error.code==='ENOENT')continue;throw error;}
+      const date=name.slice(0,10);let got;try{got=await read(file,stat,date===day,date===today);}catch(error){
+        if(error.code==='ENOENT')continue;
+        if(!signal?.aborted&&['Z_DATA_ERROR','Z_BUF_ERROR'].includes(error.code)){cache.delete(file);unavailableDays.add(date);if(!days.has(date))days.set(date,null);continue;}
+        throw error;
+      }
       if(date===today)for(const[k,a]of got.tallies){if(!tallies.has(k))tallies.set(k,{...a,models:[...a.models]});else{const prev=tallies.get(k);prev.tried+=a.tried;prev.ok+=a.ok;prev.failed+=a.failed;if(a.at>=prev.at){prev.candidate=a.candidate;prev.at=a.at;}prev.models=[...new Set([...prev.models,...a.models])];}}
       days.set(date,(days.get(date)||0)+got.count);
       if(date===day){routes.push(...got.rows);total+=got.count;}
@@ -64,7 +68,7 @@ function createHistory(directory,signal,clock=()=>new Date()) {
     for(const file of cache.keys())if(!files.includes(path.basename(file)))cache.delete(file);
     const unique=new Map();for(const row of routes)unique.set(row.id+'\0'+row.time,row);
     const sorted=[...unique.values()].sort(byTime);
-    return {days:[...days].sort(([a],[b])=>b.localeCompare(a)).map(([day,requests])=>({day,requests})),routes:sorted.slice(-2000),cut:total>2000,tallies:[...tallies.values()]};
+    return {days:[...days].sort(([a],[b])=>b.localeCompare(a)).map(([day,requests])=>({day,requests})),routes:sorted.slice(-2000),cut:total>2000,tallies:[...tallies.values()],unavailableDays:[...unavailableDays].sort()};
   };
 }
 module.exports={createHistory,validDay};

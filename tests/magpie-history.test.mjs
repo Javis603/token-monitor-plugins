@@ -3,6 +3,24 @@ import {requestMetrics,promptTotals,groupRequests,sessionSummaries,decodeOf,requ
 import {replayPlan,replayAt} from '../plugins/magpie-routes/replay.mjs';
 const require=createRequire(import.meta.url),gateway=require('../plugins/magpie-routes/gateway.cjs'),{createHistory,validDay}=require('../plugins/magpie-routes/history.cjs');
 const raw=(id,change={})=>({id,time:`2026-11-10T10:00:${String(id%60).padStart(2,'0')}.000Z`,agent:'codex',session:'private-session',callerKey:'private-key-id',callerKeyName:'Office',model:'gpt',done:true,status:200,ms:1000,order:[],tries:[],...change});
+test('corrupt gzip is isolated, reported and retried after repair',async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-corrupt-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const bad=path.join(dir,'2026-11-09.jsonl.gz');fs.writeFileSync(bad,'broken gzip');fs.writeFileSync(path.join(dir,'2026-11-10.jsonl'),JSON.stringify(raw(1))+'\n');
+  const history=createHistory(dir),got=await history('2026-11-10');assert.equal(got.routes[0].id,1);assert.deepEqual(got.unavailableDays,['2026-11-09']);assert.equal(got.days.find(d=>d.day==='2026-11-09').requests,null);
+  assert.deepEqual((await history('2026-11-09')).routes,[]);fs.writeFileSync(bad,zlib.gzipSync(JSON.stringify(raw(2))+'\n'));
+  const fixed=await history('2026-11-09');assert.deepEqual(fixed.unavailableDays,[]);assert.equal(fixed.routes[0].id,2);
+});
+test('explicit portable data directory supplies both settings and history',async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-portable-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const data=path.join(dir,'data');fs.mkdirSync(path.join(data,'routing'),{recursive:true});fs.writeFileSync(path.join(dir,'.portable'),'');fs.writeFileSync(path.join(data,'settings.json'),JSON.stringify({port:54321}));fs.writeFileSync(path.join(data,'routing','2026-11-10.jsonl'),JSON.stringify(raw(8))+'\n');
+  assert.equal(gateway.configDirectory(data),data);assert.equal(gateway.detectPort(0,data),54321);assert.throws(()=>gateway.configDirectory('relative/data'),/absolute/);
+  const oldRead=gateway.readJSON;t.after(()=>gateway.readJSON=oldRead);gateway.readJSON=async(_p,endpoint,signal)=>endpoint==='/'?{name:'magpie'}:endpoint.includes('concurrency')?{active:[]}:new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));
+  let published;const settings={revision:1,values:{port:0,dataDirectory:data,maskAccounts:true}};
+  const backend=await require('../plugins/magpie-routes/backend.cjs').activate({host:{call:async()=>settings},publish:s=>published=s});t.after(()=>backend.dispose());
+  assert.equal((await backend.call('history',{day:'2026-11-10'})).routes[0].id,8);
+  const other=path.join(dir,'other');fs.mkdirSync(path.join(other,'routing'),{recursive:true});fs.writeFileSync(path.join(other,'routing','2026-11-10.jsonl'),JSON.stringify(raw(9))+'\n');
+  backend.update({settings:{revision:2,values:{...settings.values,dataDirectory:other,port:54321}}});assert.equal(published.historyRevision,1);assert.equal((await backend.call('history',{day:'2026-11-10'})).routes[0].id,9);
+});
 test('readonly JSONL/gzip history combines late files, tracks appended lines and projects metadata only',async t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-history-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const history=createHistory(dir);
   fs.writeFileSync(path.join(dir,'2026-11-09.jsonl.gz'),zlib.gzipSync(JSON.stringify(raw(1,{body:'secret-body'}))+'\n'));

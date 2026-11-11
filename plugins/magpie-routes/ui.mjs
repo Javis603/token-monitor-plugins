@@ -17,7 +17,7 @@ export async function activate(ctx) {
       let context = initialContext, filter = '', selected = null, follow = true;
       let visible = context.visible !== false;
       let error = '', view, kind, language, headerActions;
-      let historyDay='',historyRows=[],historyDays=[],historyCut=false,historyLoading=false,scopeError='',historyRead=0,tallies=[],historyAt=0;
+      let historyDay='',historyRows=[],historyDays=[],historyCut=false,historyLoading=false,scopeError='',historyRead=0,tallies=[],historyAt=0,historyWarning='',historyRevision=data.historyRevision;
       let cards=[],cardsLoading=false,cardsError='',cardRead=0,purpose=[],replay=null,replayFrame=0,replayEpoch=0,disposed=false;
       function stopReplay(restore=false){const back=replay?.back;cancelAnimationFrame(replayFrame);replayFrame=0;replay=null;if(restore&&back){selected=back.selected;follow=back.follow;}}
       function replayStep(now){
@@ -35,6 +35,7 @@ export async function activate(ctx) {
         try{const got=await ctx.backend.call('history',{day});if(disposed||request!==historyRead)return;
           historyDays=got.days;historyRows=got.routes.sort((a,b)=>Date.parse(b.time)-Date.parse(a.time)||b.id-a.id);historyCut=got.cut;
           tallies=got.tallies;if(select){historyDay=day;selected=null;follow=!day;}
+          historyWarning=got.unavailableDays?.length?l('Some history files could not be read. Dates and totals may be incomplete: {days}',{days:got.unavailableDays.join(', ')}):'';
         }catch(e){if(disposed||request!==historyRead)return;scopeError=l('Unable to read routing history.');}
         finally{if(!disposed&&request===historyRead){historyLoading=false;render();}}
       }
@@ -63,7 +64,7 @@ export async function activate(ctx) {
         // handed on, not the number of requests labelled "Rerouted".
         const totals=historyDay||purpose.length?{requests:done.length,rerouted:done.reduce((n,r)=>n+r.tries.filter((tr,i)=>tr.rest&&i<r.tries.length-1).length,0),errors:done.filter(r=>routeStatus(r).tone==='failed').length}:data.totals;
         return {data:{...data,totals},route,filtered,allRoutes,filter,masked:data.maskAccounts,follow:replay?true:follow,error,visible,nativeData:context.nativeData,
-          expired,purpose,historyDay,historyDays,historyCut,historyLoading,scopeError,cards,cardsError,cardsLoading,replaying:Boolean(replay),replayEpoch,
+          expired,purpose,historyDay,historyDays,historyCut,historyLoading,scopeError:scopeError||historyWarning,cards,cardsError,cardsLoading,replaying:Boolean(replay),replayEpoch,
           tallies,clock:replaying?.real,replay:replay?{v:replay.v,total:replay.plan.total,speed:replay.speed,paused:replay.paused,real:replaying.real,fast:replaying.fast}:null,
           reduced:context.nativeData?.appearance?.reduceMotion==='on'||document.documentElement.dataset.reduceMotion==='on'};
 
@@ -97,7 +98,10 @@ export async function activate(ctx) {
         }
         view.update(read());
       }
-      const onUpdate=()=>{render();if(kind==='page'&&visible&&!historyDay&&!historyLoading&&!replay&&Date.now()-historyAt>15000&&data.routes.some(r=>r.done))void loadHistory('');};
+      const onUpdate=()=>{
+        const nextHistoryRevision=data.historyRevision??historyRevision;
+        if(historyRevision!==nextHistoryRevision){historyRevision=nextHistoryRevision;stopReplay();historyRows=[];historyDays=[];tallies=[];historyWarning='';selected=null;if(kind==='page'){void loadHistory(historyDay,true);void loadCards();}}
+        render();if(kind==='page'&&visible&&!historyDay&&!historyLoading&&!replay&&Date.now()-historyAt>15000&&data.routes.some(r=>r.done))void loadHistory('');};
       listeners.add(onUpdate); render();if(kind==='page'){void loadHistory('');void loadCards();}
       return { update(next) { context = next; visible = next.visible !== false;if(replay){replay.at=performance.now();cancelAnimationFrame(replayFrame);if(visible&&!replay.paused)replayFrame=requestAnimationFrame(replayStep);} render(); }, dispose() {disposed=true;historyRead++;cardRead++;stopReplay(); languageObserver.disconnect(); listeners.delete(onUpdate); view.dispose(); } };
     },

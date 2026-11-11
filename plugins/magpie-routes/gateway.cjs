@@ -4,11 +4,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { createHash } = require('node:crypto');
-const configDirectory=()=>path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'magpie');
+function configDirectory(override) {
+  const directory=typeof override==='string'?override.trim():'';
+  if(directory){if(!path.isAbsolute(directory))throw new Error('Magpie data directory must be an absolute path.');return directory;}
+  return path.join(process.env.XDG_CONFIG_HOME||path.join(os.homedir(),'.config'),'magpie');
+}
 
-function detectPort(override) {
+function detectPort(override,directory) {
+  const configDir=configDirectory(directory);
   if (override) return override;
-  const file = path.join(configDirectory(),'settings.json');
+  const file = path.join(configDir,'settings.json');
   let config;
   try { config = JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (error) { if (error.code === 'ENOENT') return 3425; throw new Error('無法讀取 Magpie 設定，請在插件設定指定連接埠。'); }
