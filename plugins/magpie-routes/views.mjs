@@ -1,7 +1,7 @@
 import {l, locale, errorText} from './i18n.mjs';
 import { el, brand, button, paths } from './graphics.mjs';
 import { wireLayer } from './flight.mjs';
-import { agentName, agentHue, routeStatus, candidateState, affinityText, stagedRoutes, stageSeats, stageTree, seatKey, requestKey } from './model.mjs';
+import { agentName, createAgentColors, routeStatus, candidateState, affinityText, stagedRoutes, stageSeats, stageTree, seatKey, requestKey } from './model.mjs';
 import { accountName, maskText, routeOutcome, routingDescription, seatNote, sourceModeName } from './story.mjs';
 import {createStory} from './story-view.mjs';
 import {createContextView} from './context.mjs';
@@ -60,18 +60,21 @@ function routeStage(ctx,small = false) {
   let expanded = new Map();
   try { const saved = JSON.parse(localStorage.getItem('magpie-routes.stageExpanded') || '[]'); expanded = new Map(saved.filter(([key,value])=>typeof key==='string'&&typeof value==='boolean')); } catch {}
   let value, timer, disposed = false;
-  const lines = wireLayer(node,()=>[...sources.children],hub,()=>[...seats.children],()=>{if(value)update(value);});
+  const {hueOf:agentHue,hues}=createAgentColors();
+  const lines = wireLayer(node,()=>[...sources.children],hub,()=>[...seats.children],()=>{if(value)update(value);},agentHue);
   function update(next) {
     value = next; clearTimeout(timer); if (!next.visible) { lines.update({...next,staged:[]}); return; }
     const staged = stagedRoutes(next.filtered,next.route,next.follow,next.clock??Date.now(),lines.playing()), entries = stageSeats(staged);
     const grouped = Boolean(node.closest('.rr-page'));
     const layout = grouped ? stageTree(entries,expanded) : entries.map(entry=>({type:'seat',...entry,depth:0,parent:''}));
     const agents = [...new Set(staged.map(route=>route.agent))], sourceIds = new Set(agents), keys = new Set(entries.map(item=>item.key));
+    hues(agents);
     for (const [id,row] of sourceRows) if (!sourceIds.has(id)) {row.remove();sourceRows.delete(id);}
     for (const [key,row] of seatRows) if (!keys.has(key)) {row.remove();seatRows.delete(key);}
     agents.forEach((id,index)=>{
       let row = sourceRows.get(id);
-      if (!row) {row=el('div','rr-node rr-source');row.dataset.agent=id;row.style.setProperty('--rr-agent',agentHue(id));row.append(brand(ctx,id),el('strong'),el('small'));sourceRows.set(id,row);}
+      if (!row) {row=el('div','rr-node rr-source');row.dataset.agent=id;row.append(brand(ctx,id),el('strong'),el('small'));sourceRows.set(id,row);}
+      row.style.setProperty('--rr-agent',agentHue(id));
       const route = staged.filter(route=>route.agent===id).at(-1);
       row.children[1].textContent=agentName(id);row.children[1].title=agentName(id);row.children[2].textContent=route.model;row.children[2].title=route.model;
       row.dataset.live=String(staged.some(route=>route.agent===id&&!route.done));

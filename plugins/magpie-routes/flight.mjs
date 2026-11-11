@@ -1,11 +1,11 @@
 import { svg } from './graphics.mjs';
 import { FLIER } from './flier.mjs';
-import { agentHue, seatKey, tried, requestKey } from './model.mjs';
+import { createAgentColors, seatKey, tried, requestKey } from './model.mjs';
 
 // Magpie play/fly/pose/home, adapted to keyed Token Monitor surface nodes.
 // The original artwork, constant-distance flight, return flip, ±24° tilt,
 // timings and request/hold/reply/failover choreography are retained. MIT.
-export function wireLayer(root, sources, hub, targets, finished) {
+export function wireLayer(root, sources, hub, targets, finished, agentHue=createAgentColors().hueOf) {
   const wires = svg('svg', { class: 'rr-wires', 'aria-hidden': 'true' });
   const sky = svg('svg', { class: 'rr-sky', 'aria-hidden': 'true' });
   root.prepend(wires); root.append(sky);
@@ -141,7 +141,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
         : dock ? `M${right.x} ${right.y}C${right.x} ${right.y+14} ${end.x-12} ${right.y+14} ${end.x-12} ${right.y+28}L${end.x-12} ${end.y-6}Q${end.x-12} ${end.y} ${end.x} ${end.y}` : curve(right,end);
       const edge = addPath(d,cls);
       edge.dataset.target=node.dataset.node||node.dataset.seat;
-      edge.style.setProperty('--rr-agent', node.style.getPropertyValue('--rr-agent') || agentHue());
+      const hue=node.style.getPropertyValue('--rr-agent');if(hue)edge.style.setProperty('--rr-agent',hue);
       // Continue from the parent's endpoint rather than adding a disconnected
       // subpath, so getPointAtLength never jumps between the two segments.
       const full = parent ? parent.d + `L${start.x} ${start.y}` + d.slice(d.indexOf('L')) : d;
@@ -159,6 +159,7 @@ export function wireLayer(root, sources, hub, targets, finished) {
       if (route.tries.length) outbound(play,route,false); else start(play,'inbound',620);
     }
     for (const play of [...plays.values()]) {
+      play.dot.style.setProperty('--rr-agent',agentHue(play.agent));
       if (!play.ms) { pose(play,1); advance(play); }
     }
     kick();

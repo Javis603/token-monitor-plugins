@@ -344,8 +344,18 @@ app.whenReady().then(async () => {
     flying=magpie.mount(root,flightContext);await waitLayout();root.style.transform='none';await waitLayout();const zoomed=measure();
     window.flightMeasurements={opening,opened,reopened,switched,zoomed};
     flying.dispose();root.replaceChildren();header.replaceChildren();root.style.cssText='';
-    magpie.dispose();
+    const colourFixture=structuredClone(sparkRestore);colourFixture.routes[0].agent='t3code';pushMagpie(colourFixture);
+    window.colourView=magpie.mount(root,{surface:'page',visible:true,headerActions:header,nativeData:{appearance:{reduceMotion:'off'}}});
+    scrollTo(0,0);await waitLayout();
+    window.agentColorProof={source:root.querySelector('.rr-source').style.getPropertyValue('--rr-agent'),wires:[...root.querySelectorAll('.rr-wires path.live')].map(p=>getComputedStyle(p).stroke),packet:getComputedStyle(root.querySelector('.rr-packet')).fill};
+    window.finishedColourFixture=structuredClone(colourFixture);finishedColourFixture.routes[0].done=true;finishedColourFixture.routes[0].status=200;for(const tr of finishedColourFixture.routes[0].tries){tr.done=true;tr.status=200;}
   })()`);
+  fs.writeFileSync(path.join(evidence,'agent-color-current.png'),(await win.webContents.capturePage()).toPNG());
+  const colours=await win.webContents.executeJavaScript('agentColorProof');console.log('Agent colour proof:',JSON.stringify(colours));
+  await win.webContents.executeJavaScript(`check('t3code-source-wires-and-packet-match-upstream',agentColorProof.source==='#5e95d7'&&agentColorProof.wires.length>=2&&agentColorProof.wires.every(c=>c==='rgb(94, 149, 215)')&&agentColorProof.packet==='rgb(94, 149, 215)');`);
+  await win.webContents.executeJavaScript(`(async()=>{pushMagpie(finishedColourFixture);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));const lines=[...document.querySelectorAll('#surface .rr-wires path.lit')];check('completed-t3code-wire-retains-upstream-blue',lines.length>0&&lines.every(p=>getComputedStyle(p).stroke==='rgb(94, 149, 215)'));})()`);
+  fs.writeFileSync(path.join(evidence,'agent-color-completed.png'),(await win.webContents.capturePage()).toPNG());
+  await win.webContents.executeJavaScript('colourView.dispose();magpie.dispose();');
   const flight = await win.webContents.executeJavaScript('flightMeasurements');
   fs.writeFileSync(path.join(evidence, 'flight-measurements.json'), JSON.stringify(flight, null, 2)+'\n');
   for (const [name, value] of Object.entries(flight)) {

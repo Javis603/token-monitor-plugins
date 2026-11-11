@@ -1,15 +1,21 @@
 import identities from './agents.mjs';
 import {l, locale} from './i18n.mjs';
 export const agents = Object.fromEntries(Object.entries(identities).map(([id,agent])=>[id,agent.name]));
-// Magpie client.js hueOf: a known agent keeps its colour; anything else takes
-// a spare that is never red, so a failure stays distinct from "in flight".
-const hues = { claude: '#d97757', 'claude-code': '#d97757', codex: '#6366f1', gemini: '#0ea5e9', copilot: '#a855f7', cursor: '#14b8a6', opencode: '#eab308', crush: '#ec4899', goose: '#84cc16', pi: '#10b981', omp: '#d946ef', omo: '#7c3aed', dsh: '#06b6d4', commandcode: '#f97316', mimocode: '#3b82f6', deveco: '#3c99cc' };
-const spare = ['#8b5cf6', '#22c55e', '#0d9488', '#0891b2', '#ca8a04', '#db2777', '#2563eb', '#65a30d'];
-export function agentHue(id) {
-  if (hues[id]) return hues[id];
-  let hash = 0;
-  for (const char of String(id || '')) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return spare[hash % spare.length];
+// Magpie client.js PALETTE/HUES/hueOf/hues, scoped to one mounted stage.
+// Keep assigned colours, separating agents currently shown together even
+// after more agents than colours have appeared. Red remains a failure.
+const PALETTE = ['#d97757','#bd8638','#a59234','#849e4a','#5aa66c','#25a98f','#00a6b0','#2e9fc9','#5e95d7','#858ad7','#a47fca','#bb77b1'];
+const HUES = {claude:0,codex:9,gemini:7,copilot:10,cursor:5,opencode:2,crush:11,goose:3,pi:4,omp:11,omo:10,dsh:6,commandcode:1,mimocode:8,deveco:7};
+export function createAgentColors() {
+  const given=new Map();
+  function hueOf(id,near){
+    let c=given.get(id);if(c&&!near?.has(c))return c;
+    let h=HUES[id];if(h==null){h=0;for(const ch of String(id||''))h=(h*31+ch.charCodeAt(0))>>>0;}
+    const had=new Set(given.values()),from=k=>PALETTE[(h+k)%PALETTE.length],ks=[...PALETTE.keys()];
+    c=from(ks.find(k=>!had.has(from(k))&&!near?.has(from(k)))??ks.find(k=>!near?.has(from(k)))??0);given.set(id,c);return c;
+  }
+  function hues(ids){const near=new Set();for(const id of ids)near.add(hueOf(id,near));}
+  return {hueOf,hues};
 }
 export const agentName = id => id==='scripts'?l('Scripts'):agents[id] || id || l("未辨識 Agent");
 // Retained days may contain IDs reused after a gateway restart.

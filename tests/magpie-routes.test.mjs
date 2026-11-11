@@ -4,6 +4,18 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import { stagedRoutes, maskName } from '../plugins/magpie-routes/model.mjs';
 const require = createRequire(import.meta.url), gateway = require('../plugins/magpie-routes/gateway.cjs');
+test('agent colours follow the upstream palette and keep visible agents distinct',async()=>{
+  const {createAgentColors}=await import('../plugins/magpie-routes/model.mjs');
+  const colours=createAgentColors(),ids=['claude','codex','gemini','t3code'];colours.hues(ids);
+  assert.deepEqual(ids.map(id=>colours.hueOf(id)),['#d97757','#858ad7','#2e9fc9','#5e95d7']);
+  const clash=createAgentColors();clash.hues(['gemini','deveco']);assert.notEqual(clash.hueOf('gemini'),clash.hueOf('deveco'));
+  const before=clash.hueOf('deveco');clash.hues(['deveco','gemini']);assert.equal(clash.hueOf('deveco'),before);
+  const crowded=createAgentColors(),many=Array.from({length:13},(_,i)=>'fixture-agent-'+i);crowded.hues(many);
+  const seen=new Map();let pair;
+  for(const id of many){const hue=crowded.hueOf(id);if(seen.has(hue)){pair=[seen.get(hue),id];break;}seen.set(hue,id);}
+  assert.ok(pair);crowded.hues(pair);assert.notEqual(crowded.hueOf(pair[0]),crowded.hueOf(pair[1]));
+  assert.equal(createAgentColors().hueOf('t3code'),'#5e95d7');
+});
 test('trace projection retains display metadata but excludes raw session and body data', () => {
   const row = { id: 1, agent: 'codex', session: 'private-session-fixture', body: 'private-body-fixture', request: { body: 'private-body-fixture' },
     order: [], tries: [], prompt: { tokens: 100, parts: [{ kind: 'files', tokens: 40, items: [{ name: 'fixture.txt', tokens: 40, body: 'private-body-fixture' }] }] } };
