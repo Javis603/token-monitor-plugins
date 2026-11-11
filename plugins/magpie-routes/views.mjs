@@ -250,7 +250,7 @@ export function createPage(container,ctx,actions) {
       bar.setAttribute('role','img');bar.setAttribute('aria-label',l('{used} of {window} tokens used',{used:compactNumber(p.tokens),window:compactNumber(p.window||p.tokens)}));
       for(const kind of ['system','tools','skills','memory','files','results','chat']){const cell=el('i','k-'+kind);cell.style.width=((p.parts.find(p=>p.kind===kind)?.tokens||0)/scale*100).toFixed(2)+'%';bar.append(cell);}
       b.replaceChildren(el('strong','',agentName(r.agent)+' · '+l('Session {n}',{n:sessionNumbers.get(g.key)})),el('span','',compactNumber(p.tokens)+(p.window?' / '+compactNumber(p.window)+' · '+Math.round(p.tokens/p.window*100)+'%':'')),bar);
-      b.setAttribute('aria-pressed',String(r.sessionKey===value.route?.sessionKey&&r.agent===value.route?.agent));b.onclick=()=>actions.pick(g.rows[0]);nodes.push(b);
+      b.setAttribute('aria-pressed',String(r.sessionKey===value.route?.sessionKey&&r.agent===value.route?.agent));b.onclick=()=>actions.pick(r);nodes.push(b);
     }
     const keys=new Set(groups.map(g=>g.key));for(const[key,b]of sessionRows)if(!keys.has(key)){b.remove();sessionRows.delete(key);}
     nodes.forEach((b,i)=>{if(sessions.children[i]!==b)sessions.insertBefore(b,sessions.children[i]||null);});

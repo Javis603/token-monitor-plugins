@@ -219,6 +219,13 @@ app.whenReady().then(async () => {
     check('concurrent-context-hides-auxiliary-and-stale-sessions',root.querySelectorAll('.rr-context-session .ctx-stack').length===2);
     check('concurrent-context-stacks-are-visible',[...root.querySelectorAll('.rr-context-session .ctx-stack')].every(n=>n.getBoundingClientRect().width>100&&n.getBoundingClientRect().height>=5));
     root.querySelector('.rr-context-session[data-session="t3code session-b"]').click();check('concurrent-context-click-selects-session-latest',root.querySelector('.ctx-crumbs').textContent.includes('#104'));
+    for(const [name,change]of [['subagent',{sub:true}],['without-tools',{sub:false,prompt:{...structuredClone(readonlyRows[1].prompt),tokens:55000,parts:[{kind:'chat',tokens:55000,items:[]}]}}]]){
+      const newer={...structuredClone(readonlyRows[1]),id:106,time:new Date().toISOString(),...change};
+      pushMagpie({...structuredClone(readonlyFixture),routes:[newer,...structuredClone(readonlyRows)]});
+      root.querySelector('.rr-context-session[data-session="t3code session-b"]').click();
+      check('session-card-selects-displayed-main-context-'+name,root.querySelector('.ctx-crumbs').textContent.includes('#104'));
+    }
+    pushMagpie(structuredClone(readonlyFixture));
     document.querySelector('.rr-back-live').click();
     check('requests-show-live-reply-counters',root.querySelector('.rr-request-live').textContent.includes('61.9 KiB'));
     check('requests-show-metrics-and-reported-credits',root.querySelectorAll('.rr-request-detail [data-metric="cache"]').length>0&&root.querySelectorAll('.rr-request-detail [data-metric="cost"]').length>0);
