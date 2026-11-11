@@ -12,7 +12,7 @@ function createHistory(directory,signal,clock=()=>new Date()) {
   async function read(file, stat, keep, tally) {
     const old=cache.get(file);
     if(old?.size===stat.size&&old.mtime===stat.mtimeMs&&(!keep||old.rows)&&(!tally||old.tallies))return old;
-    const compressed=file.endsWith('.gz'), incremental=!compressed&&old&&stat.size>old.size&&(!keep||old.rows)&&(!tally||old.tallies);
+    const compressed=file.endsWith('.gz'), incremental=!compressed&&old&&!old.tail&&stat.size>old.size&&(!keep||old.rows)&&(!tally||old.tallies);
     const offset=incremental?old.offset:0,tallies=tally&&incremental?new Map([...old.tallies].map(([key,a])=>[key,{...a,models:[...a.models]}])):new Map();
     let count=incremental?old.count:0,rows=keep&&incremental?[...old.rows]:[],pending='',consumed=offset;
     const input=fs.createReadStream(file,{start:offset,signal}),stream=compressed?input.pipe(zlib.createGunzip()):input;
@@ -20,29 +20,41 @@ function createHistory(directory,signal,clock=()=>new Date()) {
     // listens on its output; always close both handles after a read or failure.
     if(compressed)input.on('error',error=>stream.destroy(error));
     stream.setEncoding('utf8');
+    function append(line,parsed){
+      if(!line.trim())return;
+      if(Buffer.byteLength(line)>8*1024*1024)throw new Error('Magpie history record exceeds the display limit.');
+      count++;
+      if(keep||tally){
+        let row;try{
+          const raw=parsed===undefined?JSON.parse(line):parsed;raw.order ||= [];raw.tries ||= [];
+          // Magpie usage.CanceledBy: ordinary 499s and Magpie timeouts stay failed.
+          raw.canceled=raw.canceled===true||(raw.status===499&&raw.error==='the agent canceled the request');
+          row=route(raw);
+        }catch{return;}
+        if(keep){rows.push(row);if(rows.length>2200){rows.sort(byTime);rows.splice(0,rows.length-2000);}}
+        if(tally){
+          const key=w=>w.kind==='account'&&w.who?JSON.stringify([w.provider,w.who.trim().toLowerCase()]):w.id;
+          for(const w of row.order){const k=key(w);if(!tallies.has(k))tallies.set(k,{key:k,candidate:w,at:Date.parse(row.time)||0,tried:0,ok:0,failed:0,models:[]});const a=tallies.get(k);if((Date.parse(row.time)||0)>=a.at){a.candidate=w;a.at=Date.parse(row.time)||0;}}
+          for(const tr of row.tries){if(!tr.done||tr.fail==='canceled')continue;const w=row.order.find(w=>w.id===tr.id&&w.model===tr.model)||row.order.find(w=>w.id===tr.id);if(!w)continue;const a=tallies.get(key(w));a.tried++;if(tr.status<400&&!tr.fail){a.ok++;if(!a.models.includes(tr.model||w.model))a.models.push(tr.model||w.model);}else a.failed++;}
+        }
+      }
+    }
+    let tail=false;
     try {
       for await(const chunk of stream){
         pending+=chunk;
         let end;
         while((end=pending.indexOf('\n'))>=0){
-          const line=pending.slice(0,end);pending=pending.slice(end+1);consumed+=Buffer.byteLength(line+'\n');
-          if(!line.trim())continue;
-          if(Buffer.byteLength(line)>8*1024*1024)throw new Error('Magpie history record exceeds the display limit.');
-          count++;
-          if(keep||tally){
-            let row;try{const raw=JSON.parse(line);raw.order ||= [];raw.tries ||= [];row=route(raw);}catch{continue;}
-            if(keep){rows.push(row);if(rows.length>2200){rows.sort(byTime);rows.splice(0,rows.length-2000);}}
-            if(tally){
-              const key=w=>w.kind==='account'&&w.who?JSON.stringify([w.provider,w.who.trim().toLowerCase()]):w.id;
-              for(const w of row.order){const k=key(w);if(!tallies.has(k))tallies.set(k,{key:k,candidate:w,at:Date.parse(row.time)||0,tried:0,ok:0,failed:0,models:[]});const a=tallies.get(k);if((Date.parse(row.time)||0)>=a.at){a.candidate=w;a.at=Date.parse(row.time)||0;}}
-              for(const tr of row.tries){if(!tr.done||tr.fail==='canceled')continue;const w=row.order.find(w=>w.id===tr.id&&w.model===tr.model)||row.order.find(w=>w.id===tr.id);if(!w)continue;const a=tallies.get(key(w));a.tried++;if(tr.status<400&&!tr.fail){a.ok++;if(!a.models.includes(tr.model||w.model))a.models.push(tr.model||w.model);}else a.failed++;}
-            }
-          }
+          const line=pending.slice(0,end);pending=pending.slice(end+1);consumed+=Buffer.byteLength(line+'\n');append(line);
         }
         if(Buffer.byteLength(pending)>8*1024*1024)throw new Error('Magpie history record exceeds the display limit.');
       }
+      let parsed;try{parsed=JSON.parse(pending);tail=true;}catch{}
+      if(tail)append(pending,parsed);
     } finally {stream.destroy();input.destroy();}
-    const result={size:stat.size,mtime:stat.mtimeMs,offset:consumed,count,rows:keep?rows:undefined,tallies:tally?tallies:undefined};cache.set(file,result);return result;
+    // A counted EOF row has no committed newline. Reread after an append so
+    // completing that line cannot count its route or account tally twice.
+    const result={size:stat.size,mtime:stat.mtimeMs,offset:consumed,count,tail,rows:keep?rows:undefined,tallies:tally?tallies:undefined};cache.set(file,result);return result;
   }
   return async function history(day='') {
     if(signal?.aborted)throw signal.reason;

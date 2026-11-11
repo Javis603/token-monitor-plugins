@@ -171,3 +171,33 @@ test('pending allowance reads are canceled on endpoint change and hide, includin
   backend.update({visible:true});const second=backend.call('cards'),hidden=assert.rejects(second,/abort/i);backend.update({visible:false});assert.equal(signal.aborted,true);await hidden;
   const third=backend.call('cards'),disposed=assert.rejects(third,/abort/i);backend.dispose();assert.equal(signal.aborted,true);await disposed;
 });
+
+for(const compressed of [false,true])test('history accepts complete EOF rows without double counting: '+(compressed?'gzip':'plain'),async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-eof-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const file=path.join(dir,'2026-11-10.jsonl'+(compressed?'.gz':'')),record=id=>raw(id,{order:[{id:'a',kind:'account',provider:'codex',who:'測試@example.test',model:'gpt'}],tries:[{id:'a',model:'gpt',done:true,status:200}]}),text=id=>JSON.stringify(record(id));
+  const write=s=>fs.writeFileSync(file,compressed?zlib.gzipSync(s):s),history=createHistory(dir,undefined,()=>new Date('2026-11-10T12:00:00Z'));
+  async function check(ids){const got=await history('2026-11-10');assert.deepEqual(got.routes.map(r=>r.id),ids);assert.equal(got.days[0].requests,ids.length);assert.equal(got.tallies[0].tried,ids.length);assert.equal(got.tallies[0].ok,ids.length);}
+  write(text(1)+'\n'+text(2));await check([1,2]);await check([1,2]);
+  if(compressed){
+    write(text(1)+'\n'+text(2)+'\n'+text(3));await check([1,2,3]);
+    write(text(1)+'\n'+text(2)+'\n'+text(3)+'\n'+text(4).slice(0,20));await check([1,2,3]);
+  }else{
+    fs.appendFileSync(file,'\n'+text(3).slice(0,20));await check([1,2]);
+    fs.appendFileSync(file,text(3).slice(20));await check([1,2,3]);
+    fs.appendFileSync(file,'\n'+text(4)+'\n');await check([1,2,3,4]);
+    fs.appendFileSync(file,text(5)+'\n');await check([1,2,3,4,5]);
+    fs.appendFileSync(file,text(6).slice(0,20));await check([1,2,3,4,5]);
+    fs.appendFileSync(file,text(6).slice(20)+'\n');await check([1,2,3,4,5,6]);
+  }
+});
+
+test('only historical agent-canceled 499s regain legacy cancellation metadata',async t=>{
+  const {routeStatus}=await import('../plugins/magpie-routes/model.mjs');
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-legacy-cancel-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const canceled=raw(1,{status:499,error:'the agent canceled the request',tries:[{id:'a',done:true,status:499}]}),ordinary=raw(2,{status:499,error:'upstream closed'}),timeout=raw(3,{status:499,error:'magpie stopped waiting'}),other=raw(4,{status:500,error:'the agent canceled the request'});
+  for(const compressed of [false,true]){
+    const file=path.join(dir,'2026-11-10.jsonl'+(compressed?'.gz':'')),text=[canceled,ordinary,timeout,other].map(r=>JSON.stringify(r)).join('\n')+'\n';fs.writeFileSync(file,compressed?zlib.gzipSync(text):text);
+    const got=await createHistory(dir)('2026-11-10');assert.equal(got.routes[0].canceled,true);assert.equal(routeStatus(got.routes[0]).label,'Canceled');assert.deepEqual(got.routes.slice(1).map(r=>routeStatus(r).tone),['failed','failed','failed']);assert.equal(got.routes.filter(r=>routeStatus(r).tone==='failed').length,3);fs.unlinkSync(file);
+  }
+  assert.notEqual(gateway.route(canceled).canceled,true);
+});
