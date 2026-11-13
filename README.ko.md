@@ -15,6 +15,7 @@
 | 플러그인 | 설명 | 버전 |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.ko.md) | 로컬 실시간 라우팅과 컨텍스트 보기. | `0.1.0` |
+| [Antigravity Account Ledger](plugins/antigravity-account-ledger/README.ko.md) | Google 계정 및 사용자 지정 날짜별 Antigravity 토큰 사용량 및 비용 원장. | `0.1.0` |
 
 ## 설치
 

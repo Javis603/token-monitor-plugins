@@ -15,6 +15,7 @@
 | 插件 | 说明 | 状态 |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.zh-CN.md) | 查看本机实时路由与上下文。 | `0.1.0` |
+| [Antigravity 多账号用量账本](plugins/antigravity-account-ledger/README.zh-CN.md) | 按 Google 账号与自定义日期区间统计 Antigravity 全模型 Token 用量与费用。 | `0.1.0` |
 
 ## 安装
 
@@ -39,4 +40,4 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 ## 授权
 
-原创代码及文档采用 [MIT](LICENSE)。第三方授权与来源见 [NOTICE](NOTICE.md)。
+原创代码及文档采用 [MIT](LICENSE)。第三方授权与来源见 [NOTICE](NOTICE.md).
