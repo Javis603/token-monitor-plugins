@@ -2325,3 +2325,180 @@ test('antigravity-account-ledger restores unset temp env vars instead of the lit
     removeTestDir(tmpDir);
   }
 });
+
+test('antigravity-account-ledger resolves Gemini 4 Carbon/Hydrogen, custom pricing, model aliases, tokscale catalog caches, and unpriced tokens', () => {
+  const carbon = backend.resolveModelAndPrice({
+    modelEnum: 1437,
+    displayName: 'Gemini 4 Carbon (Medium)',
+    inputTokens: 1_000_000,
+    cacheReadTokens: 1_000_000,
+    outputTokens: 100_000
+  });
+  assert.equal(carbon.model, 'gemini-4-carbon');
+  assert.equal(carbon.canonicalPricingModel, 'gemini-4-carbon');
+  assert.equal(carbon.priced, true);
+  assert.equal(carbon.unpricedTokens, 0);
+  assert.equal(Number(carbon.costUsd.toFixed(4)), 3.1);
+
+  const hydrogen = backend.resolveModelAndPrice({
+    modelEnum: 1528,
+    displayName: 'Gemini 4 Hydrogen (XHigh)',
+    inputTokens: 1_000_000,
+    outputTokens: 100_000
+  });
+  assert.equal(hydrogen.model, 'gemini-4-hydrogen');
+  assert.equal(hydrogen.canonicalPricingModel, 'gemini-4-hydrogen');
+  assert.equal(hydrogen.priced, true);
+  assert.equal(hydrogen.unpricedTokens, 0);
+  assert.equal(Number(hydrogen.costUsd.toFixed(4)), 2.25);
+
+  const unpriced = backend.resolveModelAndPrice({
+    responseModel: 'brand-new-model-x',
+    modelEnum: 1318,
+    inputTokens: 500,
+    outputTokens: 200
+  });
+  assert.equal(unpriced.model, 'brand-new-model-x');
+  assert.equal(unpriced.priced, false);
+  assert.equal(unpriced.costUsd, 0);
+  assert.equal(unpriced.unpricedTokens, 700);
+
+  const pricingContext = backend.buildPricingContext({
+    settings: {
+      customModelPricing: [
+        { modelId: 'custom-paid', inputPerM: 4, outputPerM: 20 },
+        { modelId: 'custom-free', inputPerM: 0, outputPerM: 0 }
+      ],
+      modelAliases: {
+        'alias-to-carbon': 'gemini-4-carbon',
+        'alias-to-custom': 'custom-paid'
+      }
+    },
+    remoteSnapshot: [
+      {
+        data: {
+          'google/remote-only-model': {
+            input_cost_per_token: 0.000001,
+            output_cost_per_token: 0.000005
+          }
+        }
+      }
+    ]
+  });
+
+  const aliasedCarbon = backend.resolveModelAndPrice({
+    responseModel: 'alias-to-carbon',
+    inputTokens: 1_000_000,
+    outputTokens: 0,
+    pricingContext
+  });
+  assert.equal(aliasedCarbon.priced, true);
+  assert.equal(aliasedCarbon.unpricedTokens, 0);
+  assert.equal(aliasedCarbon.costUsd, 2);
+
+  const aliasedCustom = backend.resolveModelAndPrice({
+    responseModel: 'alias-to-custom',
+    inputTokens: 1_000_000,
+    outputTokens: 100_000,
+    pricingContext
+  });
+  assert.equal(aliasedCustom.priced, true);
+  assert.equal(aliasedCustom.unpricedTokens, 0);
+  assert.equal(aliasedCustom.costUsd, 6);
+
+  const explicitFree = backend.resolveModelAndPrice({
+    responseModel: 'custom-free',
+    inputTokens: 50_000,
+    outputTokens: 10_000,
+    pricingContext
+  });
+  assert.equal(explicitFree.priced, true);
+  assert.equal(explicitFree.costUsd, 0);
+  assert.equal(explicitFree.unpricedTokens, 0);
+
+  const remoteFallback = backend.resolveModelAndPrice({
+    responseModel: 'remote-only-model',
+    inputTokens: 1_000_000,
+    outputTokens: 200_000,
+    pricingContext
+  });
+  assert.equal(remoteFallback.priced, true);
+  assert.equal(remoteFallback.unpricedTokens, 0);
+  assert.equal(remoteFallback.costUsd, 2);
+});
+
+test('antigravity-account-ledger propagates unpricedTokens through aggregation and renders honest UI indicators', async () => {
+  const { activate } = await import('../plugins/antigravity-account-ledger/ui.mjs');
+  const ledger = backend.createDefaultLedger('2026-10-01T00:00:00Z');
+  backend.recordAccountHeartbeat({ email: 'a@example.com', source: 'antigravity_tools' }, '2026-10-10T00:00:00Z', ledger);
+  const aggregated = backend.aggregateAccountUsage({
+    calls: [
+      {
+        day: '2026-10-10',
+        timestampMs: Date.parse('2026-10-10T01:00:00Z'),
+        model: 'gemini-3.8-flash',
+        inputTokens: 1000,
+        outputTokens: 500,
+        totalTokens: 1500,
+        costUsd: 1.25,
+        unpricedTokens: 0
+      },
+      {
+        day: '2026-10-10',
+        timestampMs: Date.parse('2026-10-10T02:00:00Z'),
+        model: 'mystery-unpriced-model',
+        inputTokens: 400,
+        outputTokens: 100,
+        totalTokens: 500,
+        costUsd: 0,
+        unpricedTokens: 500
+      }
+    ],
+    ledger,
+    quotaWindows: {},
+    range: { start: '2026-10-01', end: '2026-10-31' },
+    accountFilter: 'all',
+    discoveredAccounts: ['a@example.com']
+  });
+  assert.equal(aggregated.totalTokens, 2000);
+  assert.equal(aggregated.costUsd, 1.25);
+  assert.equal(aggregated.unpricedTokens, 500);
+  assert.equal(aggregated.models['mystery-unpriced-model'].unpricedTokens, 500);
+  assert.equal(aggregated.byAccount['a@example.com'].unpricedTokens, 500);
+
+  const dom = installFakeDom();
+  try {
+    const container = new FakeElement('div');
+    const ui = activate({
+      backend: {
+        async call() {
+          return {
+            summary: aggregated,
+            discoveredAccounts: ['a@example.com'],
+            activeAccount: { email: 'a@example.com' },
+            accountFilter: 'all',
+            range: { start: '2026-10-01', end: '2026-10-31' }
+          };
+        },
+        subscribe() { return () => {}; }
+      }
+    });
+    const mounted = ui.mount(container, {});
+    await tick(20);
+    const root = container.querySelector('.ag-ledger-root');
+    const kpiValues = root.querySelectorAll('.ag-ledger-kpi-value');
+    assert.equal(kpiValues[1].textContent, '$1.25 + ?');
+    assert.match(kpiValues[1].title, /500 Tokens 未配置费率/);
+
+    const modelRows = root.querySelector('.ag-ledger-table-wrap').querySelectorAll('.ag-ledger-row');
+    assert.equal(modelRows.length, 2);
+    const mysteryRow = modelRows.find((r) => r.children[0].textContent === 'mystery-unpriced-model');
+    assert.ok(mysteryRow);
+    const mysteryCostCell = mysteryRow.children[mysteryRow.children.length - 1];
+    assert.equal(mysteryCostCell.textContent, '—');
+    assert.match(mysteryCostCell.title, /500 Tokens 未配置费率/);
+    mounted.dispose();
+  } finally {
+    dom.restore();
+  }
+});
