@@ -30,6 +30,26 @@
       },
       "versions": [
         {
+          "version": "0.1.3",
+          "changelog": {
+            "en": "Rebuild the main page's Requests and Accounts-and-keys blocks from Magpie's own routing page, and follow Magpie's route stage more closely. Requests sit in a bounded, scrolling card with day pills, a By request/session/key bar, purpose and metrics menus and compact rows (time, agent, model, who answered, numbers, service-tier and TUI tags). Accounts and keys follow Magpie's provider groups, status dots, folds and Show-more list, with one line per allowance window and the reason when an allowance cannot be read. The route story shows Magpie's masking badge, failed steps use its cross mark, session blocks use its layout, and an account that Magpie rests is drawn resting, with no live wire. The stage, caption and context stay flat on the page; the context card, request list and account list are the only cards. The page no longer has an agent filter, which Magpie does not have; the Notch keeps its own. Long histories draw as you scroll, and sorting and paging controls are gone with them.",
+            "zh-CN": "按 Magpie 路由页重做主页的“请求”与“账号与密钥”区块，并让路由舞台更贴近 Magpie。请求放在有高度上限、可滚动的卡片内，附日期标签、按请求／会话／密钥切换栏、用途与指标菜单，以及精简的请求行（时间、Agent、模型、响应者、数字、服务档与 TUI 标记）。账号与密钥沿用 Magpie 的供应商分组、状态圆点、折叠与“显示其余”列表，每个额度窗口一行，额度读取失败时会显示原因。路由说明旁加入脱敏徽章，失败步骤改用 Magpie 的叉号标记，会话区块采用 Magpie 布局，被 Magpie 判定休息的账号会画成休息状态而不再有实时连线。舞台、说明与上下文保持在页面上，只有上下文卡片、请求列表与账号列表是卡片。页面不再有 Magpie 没有的 Agent 筛选（Notch 保留自己的）。长历史随滚动逐步加载，排序与分页控件一并移除。",
+            "zh-TW": "依 Magpie 路由頁重做主頁的「請求」與「帳號與金鑰」區塊，並讓路由舞台更貼近 Magpie。請求放在有高度上限、可捲動的卡片內，附日期標籤、按請求／會話／金鑰切換列、用途與指標選單，以及精簡的請求列（時間、Agent、模型、回應者、數字、服務層級與 TUI 標記）。帳號與金鑰沿用 Magpie 的供應商分組、狀態圓點、收合與「顯示其餘」清單，每個額度視窗一行，額度讀取失敗時會顯示原因。路由說明旁加入遮蔽徽章，失敗步驟改用 Magpie 的交叉標記，會話區塊採用 Magpie 版面，被 Magpie 判定休息的帳號會畫成休息狀態而不再有即時連線。舞台、說明與上下文維持在頁面上，只有上下文卡片、請求清單與帳號清單是卡片。頁面不再有 Magpie 沒有的 Agent 篩選（Notch 保留自己的）。長歷史隨捲動逐步載入，排序與分頁控制一併移除。",
+            "ko": "메인 페이지의 '요청'과 '계정 및 키'를 Magpie 라우팅 페이지 기준으로 다시 만들고 라우팅 스테이지도 Magpie에 더 가깝게 맞췄습니다. 요청은 높이 제한이 있는 스크롤 카드에 들어가며 날짜 탭, 요청/세션/키별 전환 막대, 용도 및 지표 메뉴, 간결한 행(시간, Agent, 모델, 응답자, 수치, 서비스 티어 및 TUI 태그)을 갖습니다. 계정과 키는 Magpie의 공급자 그룹, 상태 점, 접기, '더 보기'를 따르고 한도 창마다 한 줄로 표시하며 사용량을 읽지 못하면 이유를 보여 줍니다. 라우팅 설명 옆에 마스킹 배지를 표시하고, 실패한 단계는 Magpie의 × 표시, 세션 블록은 Magpie 레이아웃을 쓰며, Magpie가 쉬는 중으로 본 계정은 실시간 연결선 없이 쉬는 상태로 그립니다. 스테이지, 설명, 컨텍스트는 페이지 위에 두고 카드는 컨텍스트, 요청 목록, 계정 목록뿐입니다. Magpie에 없는 에이전트 필터는 페이지에서 제거했습니다(Notch는 자체 필터 유지). 긴 기록은 스크롤에 따라 그려지며 정렬과 페이지 이동 컨트롤은 없어졌습니다.",
+            "ja": "メインページの「リクエスト」と「アカウントとキー」を Magpie のルーティングページから作り直し、ルートのステージも Magpie に近づけました。リクエストは高さに上限のあるスクロール可能なカードに入り、日付タブ、リクエスト／セッション／キー別の切り替え、用途と指標のメニュー、簡潔な行（時刻、Agent、モデル、応答者、数値、サービス層と TUI のタグ）を備えます。アカウントとキーは Magpie のプロバイダーグループ、状態ドット、折りたたみ、「さらに表示」に従い、枠ごとに1行で、使用量を読めない場合はその理由を表示します。ルート説明の横にマスキングバッジを表示し、失敗したステップは Magpie の×印、セッションのブロックは Magpie のレイアウトになり、Magpie が休止と判断したアカウントは休止として描かれ、ライブの接続線は出ません。ステージ、説明、コンテキストはページ上に置き、カードはコンテキスト、リクエスト一覧、アカウント一覧だけです。Magpie にないエージェントフィルターはページから外しました（Notch は独自のものを維持）。長い履歴はスクロールに応じて描画し、並べ替えとページ送りは廃止しました。",
+            "pt-BR": "Refaz os blocos Requisições e Contas e chaves da página principal a partir da própria página de roteamento do Magpie e aproxima o palco de roteamento do Magpie. As requisições ficam em um cartão com altura limitada e rolagem, com abas de dia, barra Por requisição/sessão/chave, menus de finalidade e métricas e linhas compactas (hora, agente, modelo, quem respondeu, números, etiquetas de nível de serviço e TUI). Contas e chaves seguem os grupos de provedor, pontos de estado, dobras e Mostrar mais do Magpie, com uma linha por janela de cota e o motivo quando a cota não pode ser lida. A explicação da rota mostra o selo de mascaramento, os passos com falha usam a cruz do Magpie, os blocos de sessão usam o layout dele e uma conta que o Magpie põe em descanso é desenhada em descanso, sem fio ao vivo. O palco, a legenda e o contexto ficam na própria página; só o cartão de contexto, a lista de requisições e a lista de contas são cartões. A página não tem mais o filtro de agente, que o Magpie não tem (o Notch mantém o seu). Históricos longos são desenhados conforme a rolagem, e os controles de ordenação e paginação foram removidos."
+          },
+          "engines": {
+            "tokenMonitor": ">=0.81.0"
+          },
+          "url": "https://raw.githubusercontent.com/Javis603/token-monitor-plugins/dist/magpie-routes-0.1.3.tmplugin",
+          "sha256": "5b9b9beea45d7d4e884f6fcaa50a2d91d63bf6e6c76225207f2f7ecc8fac34cf",
+          "types": [
+            "widget",
+            "page"
+          ]
+        },
+        {
           "version": "0.1.2",
           "changelog": {
             "en": "Align the main routing graph with Magpie: route and nested-group headings, keyboard-accessible folding, member order, two-line account details and hierarchical wires. Restore live reply counters and quota, wallet and reserve labels while retaining account masking. Add concurrent-session context summaries, request/session/key grouping, purpose filters, metrics, saved allowance windows, retained-day browsing and recorded-event replay. Routing history and allowance reads remain read-only and metadata-only.",
