@@ -79,7 +79,7 @@ function affinity(raw) {
 }
 function candidate(item) {
   return {
-    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset','expires','heldBy','noURL'],
+    ...fields(item, ['id','provider','name','who','model','plan','routing','kind','fixed','icon','usedRenews','due','dueBy','sunk','speaks','restarts','agent','unit','lapse','preset','expires','heldBy','noURL','usedWindow'],
       ['rank','pace','fit','tokens','lateTtft','lateTps','window','capped','amount','limit','balance','unreached','reserve'], ['turn','held','barred','fallback','aside','known','free','learns','noCredits','credits','unlisted','fast','shared','weekLow','useFirst','creditsLast','heldOwn'], ['renews','via','soon']),
     usedPercent: number(item.used), rest: rest(item.rest),
     price: fields(item.price, [], ['input','output'], ['peak'])
@@ -119,13 +119,14 @@ function route(raw) {
     for: fields(raw.for,['agent','model','instead','why','missing'],[],['mcp','picked','notSearched','nothingFound','unknown']),
     subagent: fields(raw.subagent,['asked','to','kept'],[],['lead']),subagentId:text(raw.subagentId),subagentEffort:text(raw.subagentEffort),
     rule: rule(raw.rule), nested: Array.isArray(raw.nested) ? raw.nested.slice(0,32).map(item => ({ group: text(item.group), name: text(item.name), rule: rule(item.rule) })) : [],
+    masked: object(raw.masked) ? {n: number(raw.masked.n), warned: number(raw.masked.warned), kinds: object(raw.masked.kinds) ? Object.fromEntries(Object.entries(raw.masked.kinds).filter(([k,v])=>typeof v==='number'&&/^[A-Z_]{1,24}$/.test(k)).slice(0,32).map(([k,v])=>[k,number(v)])) : {}} : null,
     sealedTask: raw.sealedTask === true, leadAccount: text(raw.leadAccount), compaction: text(raw.compaction),
     left: Array.isArray(raw.left) ? raw.left.slice(0,128).map(candidate) : [],
     order: raw.order.slice(0, 128).map(candidate),
     tries: raw.tries.slice(0, 128).map(item => ({
       id: text(item.id), model: text(item.model), effort: text(item.effort), done: item.done === true,
       status: number(item.status), ms: number(item.ms), fail: text(item.fail), error: text(item.error), served: text(item.served), rest: rest(item.rest),
-      ...fields(item, ['start','fixed','ruleEffort','upstream','pin','sentBy','mappedFrom','tier','tierServed'], ['again','replan','patience','ttft','firstText','flow','firstReasoning','queued'], ['picked','gone','earlier','credits','reasoningHidden','swapped','routed','kept','fast']),
+      ...fields(item, ['start','fixed','ruleEffort','upstream','pin','sentBy','mappedFrom','tier','tierServed','entry','entryWhy'], ['again','replan','patience','ttft','firstText','flow','firstReasoning','queued'], ['picked','gone','earlier','credits','reasoningHidden','swapped','routed','kept','fast']),
       reset: fields(item.reset,['who','text','agent']),
       auto: Array.isArray(item.auto) ? item.auto.filter(object).slice(0,128).map(p=>fields(p,['model','via','skipped','api','refused'],[],['session'])) : [],
       net: fields(item.net, [], ['own','before','pool','dns','connect','tls','send','wait','head'])

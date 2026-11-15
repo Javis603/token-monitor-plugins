@@ -1,6 +1,6 @@
 /* Stage proportions, account anatomy and flier styles adapted from Magpie,
    Copyright (c) 2026 yetone, MIT. See MAGPIE-LICENSE.txt. */
-.rr-root { --rr-ink: var(--notch-ink,var(--text,#e8e8eb)); --rr-muted: var(--notch-dim,var(--muted,#a3a3ad)); --rr-rule: var(--notch-rule,var(--line,rgba(160,160,175,.2))); --rr-fill: var(--notch-fill,var(--glass-soft,rgba(160,160,175,.055))); --rr-strong: var(--notch-fill-strong,rgba(var(--overlay-rgb,255,255,255),.13)); --rr-red: var(--red,#db8585); color:var(--rr-ink); font-family:var(--notch-ui,var(--ui-font,system-ui)); font-size:12px; line-height:1.4; min-width:0; max-width:100%; text-align:left; }
+.rr-root { --rr-card: var(--glass-soft,rgba(160,160,175,.055)); --rr-ink: var(--notch-ink,var(--text,#e8e8eb)); --rr-muted: var(--notch-dim,var(--muted,#a3a3ad)); --rr-rule: var(--notch-rule,var(--line,rgba(160,160,175,.2))); --rr-fill: var(--notch-fill,var(--glass-soft,rgba(160,160,175,.055))); --rr-strong: var(--notch-fill-strong,rgba(var(--overlay-rgb,255,255,255),.13)); --rr-red: var(--red,#db8585); color:var(--rr-ink); font-family:var(--notch-ui,var(--ui-font,system-ui)); font-size:12px; line-height:1.4; min-width:0; max-width:100%; text-align:left; }
 .rr-root { container-type:inline-size; }
 .rr-root *, .rr-root *::before, .rr-root *::after { box-sizing:border-box; }
 .rr-root [hidden] { display:none !important; }
@@ -313,12 +313,6 @@
 .rr-branch-mode:not([hidden]) + .rr-branch-chevron { margin-left:0; }
 
 /* Magpie's below-stage session strip, history controls and request/account lists. */
-.rr-context-sessions { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); gap:8px; margin:12px 0 20px; }
-.rr-root .rr-context-session { display:flex; flex-direction:column; gap:5px; min-width:0; padding:10px 12px; border:1px solid var(--rr-rule); border-radius:10px; background:var(--rr-fill); text-align:left; }
-.rr-context-session[aria-pressed="true"] { border-color:var(--rr-ink); }
-.rr-context-session strong { font-size:12px; font-weight:550; }
-.rr-context-session > span:not(.ctx-stack) { color:var(--rr-muted); font-size:11px; }
-.rr-context-session .ctx-stack { display:flex; width:100%; height:5px; min-height:5px; margin-top:2px; }
 .rr-history-days,.rr-history-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:8px 0; min-width:0; }
 .rr-root .rr-text { border:1px solid var(--rr-rule); border-radius:6px; padding:4px 8px; background:transparent; color:var(--rr-muted); font-size:11px; }
 .rr-root .rr-text:hover,.rr-root .rr-text[aria-pressed="true"] { background:var(--rr-fill); color:var(--rr-ink); }
@@ -353,6 +347,40 @@
 .rr-replay > span:last-of-type { color:var(--rr-muted); font-size:11px; }
 @container(min-width:1150px) { .rr-history-columns { grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr); } }
 /* context.css loads after routes.css; session strips must override its folded-only stack rule. */
-.rr-context-sessions .rr-context-session .ctx-stack { display:flex; flex:none; width:100%; height:5px; min-height:5px; }
 
 .rr-history-paging { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin:10px 0; font-size:11px; color:var(--rr-muted); }
+
+/* Token Monitor keeps the stage, caption, route explanation and context on the page itself, divided by hairlines:
+   the context card, the request list and the account list are the cards. */
+.rr-page .rr-stage-box { background:transparent; border:0; border-radius:0; padding:2px 0 0; margin:0 0 18px; }
+.rr-page .rr-stage-box > .rr-context { margin-top:0; }
+.rr-page .rr-stage-box .rr-context .ctx-card { margin:16px 0 0; }
+.rr-page .rr-stage-box > .rr-context-sessions { margin:12px 0 0; }
+/* Magpie's session blocks (.rt-ctx-sess / .rt-ctx-s) */
+.rr-page .rt-ctx-sess { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr)); gap:8px; margin:12px 0 0; }
+.rr-page .rt-ctx-sess[hidden] { display:none; }
+.rr-root .rt-ctx-s { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:4px; min-width:0; padding:8px 10px; font:inherit; font-size:12px; text-align:left; color:var(--rr-secondary,var(--rr-ink)); background:transparent; border:1px solid var(--rr-rule); border-radius:8px; cursor:pointer; }
+.rt-ctx-s[aria-pressed="true"] { background:color-mix(in srgb,var(--rr-ink) 7%,transparent); color:var(--rr-ink); }
+.rt-ctx-s .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.rt-ctx-s .sub { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; color:var(--rr-muted); font-variant-numeric:tabular-nums; }
+.rr-root .rt-ctx-s .ctx-stack { display:flex; max-width:none; width:100%; height:4px; min-height:4px; border-radius:2px; margin:0; }
+
+/* Magpie's masking badge beside the route story's heading */
+.rr-story > .mask-badge { display:inline-flex; align-items:center; gap:3px; height:18px; margin-left:8px; padding:0 6px 0 5px; border:0; border-radius:99px; background:color-mix(in srgb,var(--accent,#b7ead4) 16%,transparent); color:var(--accent,#b7ead4); font:inherit; font-size:11px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; vertical-align:middle; cursor:default; }
+.rr-story > .mask-badge.warn { background:color-mix(in srgb,#e7bb62 16%,transparent); color:#e7bb62; }
+.rr-story > .mask-badge[hidden] { display:none; }
+
+/* a failed step is Magpie's cross, not a red disc */
+.rr-steps li.bad::before { background:var(--rr-red); -webkit-mask:var(--x-mark) center / contain no-repeat; mask:var(--x-mark) center / contain no-repeat; border-radius:0; transform:scale(1.5); }
+.rr-steps li.swap::before { background:var(--rr-amber,#e7bb62); }
+/* a seat is one line on the stage, as in Magpie: name, plan and model, then what it says (cut short, never the model);
+   the bar goes under. A narrow stage stacks them. */
+.rr-page .rr-seat-body { grid-template-columns:minmax(0,max-content) minmax(min(14em,40%),1fr); column-gap:10px; row-gap:6px; align-items:center; }
+.rr-page .rr-seat-name { flex:0 1 auto; }
+.rr-page .rr-seat-note { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right; overflow-wrap:normal; }
+.rr-page .rr-seat-body > .rr-bar { grid-column:1 / -1; }
+.rr-page .rr-seats.rr-seats-stacked .rr-seat-body { grid-template-columns:minmax(0,1fr); }
+.rr-page .rr-seats.rr-seats-stacked .rr-seat-note { white-space:normal; overflow-wrap:anywhere; text-align:left; }
+
+/* The agent filter lives with the other page controls in the host's header, as it does in the Notch, not on a row of its own. */
+.rr-header-tools .rr-filter { max-width:140px; }

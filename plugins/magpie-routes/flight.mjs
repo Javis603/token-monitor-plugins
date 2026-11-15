@@ -134,7 +134,7 @@ export function wireLayer(root, sources, hub, targets, finished, agentHue=create
     const branches = new Map();
     for (const node of targets()) {
       const end = point(node,false), parent = branches.get(node.dataset.parent);
-      const cls = node.dataset.tone === 'working' ? 'live' : node.dataset.selected === 'true' ? 'lit' : node.dataset.tone === 'resting' ? 'rest' : '';
+      const cls = node.dataset.tone === 'resting' ? 'rest' : node.dataset.tone === 'working' ? 'live' : node.dataset.selected === 'true' ? 'lit' : '';
       // Headers join the hub; descendants join their parent header in the
       // left gutter. Flights use the complete path even with a branch folded.
       const start = parent ? {x:parent.end.x+8,y:parent.end.y} : right;

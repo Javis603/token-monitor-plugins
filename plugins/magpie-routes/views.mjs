@@ -1,14 +1,26 @@
 import {l, locale, errorText} from './i18n.mjs';
-import { el, brand, button, paths } from './graphics.mjs';
+import { el, svg, brand, button, paths } from './graphics.mjs';
 import { wireLayer } from './flight.mjs';
 import { agentName, createAgentColors, routeStatus, candidateState, affinityText, stagedRoutes, stageSeats, stageTree, seatKey, requestKey } from './model.mjs';
 import { accountName, maskText, routeOutcome, routingDescription, seatNote, sourceModeName } from './story.mjs';
 import {createStory} from './story-view.mjs';
 import {createContextView} from './context.mjs';
-import {createRequests,sessionSummaries,cardFor,foldQuota} from './requests.mjs';
-const compactNumber = value => new Intl.NumberFormat(locale(), { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+import {sessionSummaries,cardFor,foldQuota} from './requests.mjs';
+import {createRequests} from './request-list.mjs';
+import {fmtN} from './formats.mjs';
+const compactNumber = fmtN;
 const timeLabel = value => new Date(value).toLocaleTimeString(locale(), { hour12: false });
 
+const MASK_KINDS={"API_KEY": "API keys", "PRIVATE_KEY": "Private keys", "TOKEN": "Tokens", "PASSWORD": "Passwords", "SECRET": "Secrets", "EMAIL": "Emails", "PHONE": "Phone numbers", "ID_CARD": "ID numbers", "BANK_CARD": "Bank cards", "PERSON": "Names", "ADDRESS": "Addresses", "ACCOUNT": "Account numbers", "SSN": "SSNs", "PASSPORT": "Passports", "IBAN": "IBANs", "BIRTHDAY": "Birthdays", "MAC": "MAC addresses", "SERIAL": "Serial numbers", "USERNAME": "User names", "HOSTNAME": "Computer names", "IP": "IP addresses", "BUCKET": "Buckets", "TERM": "Your words"};
+const SHIELD='M8 1.8 13 3.6v4.1c0 3-2.1 5.4-5 6.5-2.9-1.1-5-3.5-5-6.5V3.6Z';
+function renderMaskBadge(node,route,replaying){
+  const m=route?.masked,warned=Boolean(m&&!m.n&&m.warned>0);
+  node.hidden=!m||!(m.n||m.warned)||replaying;if(node.hidden)return;
+  const count=fmtN(warned?m.warned:m.n),kinds=Object.entries(m.kinds||{}).sort((x,y)=>y[1]-x[1]).map(([k,n])=>`${MASK_KINDS[k]?l(MASK_KINDS[k]):k} ${n}`).join(', ');
+  const title=warned?l(m.warned===1?'1 value went to the vendor as written, as you set':'{n} values went to the vendor as written, as you set',{n:count}):l(m.n===1?'1 value masked before it went to the vendor: {kinds}':'{n} values masked before it went to the vendor: {kinds}',{n:count,kinds});
+  const icon=svg('svg',{viewBox:'0 0 16 16',width:11,height:11,fill:'none',stroke:'currentColor','stroke-width':1.7,'stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'});icon.append(svg('path',{d:SHIELD}));
+  node.classList.toggle('warn',warned);node.title=title;node.setAttribute('aria-label',title);node.replaceChildren(icon,el('span','',count));
+}
 function controls(actions, { agentFilter = true } = {}) {
   const node = el('div', 'rr-controls'), connection = el('span', 'rr-connection'); connection.setAttribute('role', 'status');
   const agent = agentFilter ? el('select', 'rr-filter') : null;
@@ -61,6 +73,8 @@ function routeStage(ctx,small = false) {
   try { const saved = JSON.parse(localStorage.getItem('magpie-routes.stageExpanded') || '[]'); expanded = new Map(saved.filter(([key,value])=>typeof key==='string'&&typeof value==='boolean')); } catch {}
   let value, timer, disposed = false;
   const {hueOf:agentHue,hues}=createAgentColors();
+  // a seat is one line while the list holds it (Magpie's .rt-accts max460), two when it is narrower
+  const seatWidth=new ResizeObserver(([e])=>{const w=e.contentRect.width;if(!w)return;requestAnimationFrame(()=>seats.classList.toggle('rr-seats-stacked',w<=460));});seatWidth.observe(seats);
   const lines = wireLayer(node,()=>[...sources.children],hub,()=>[...seats.children],()=>{if(value)update(value);},agentHue);
   function update(next) {
     value = next; clearTimeout(timer); if (!next.visible) { lines.update({...next,staged:[]}); return; }
@@ -175,7 +189,7 @@ function routeStage(ctx,small = false) {
     if(expires.length&&!next.replaying)timer=setTimeout(()=>{if(!disposed)update(value);},Math.min(...expires)+20);
     return {staged,seats:entries};
   }
-  return {node,update,playing:()=>lines.playing().size>0,dispose(){disposed=true;clearTimeout(timer);lines.dispose();}};
+  return {node,update,hueOf:agentHue,playing:()=>lines.playing().size>0,dispose(){disposed=true;seatWidth.disconnect();clearTimeout(timer);lines.dispose();}};
 }
 
 function focusLabel(value) {
@@ -225,15 +239,15 @@ export function createRail(container,ctx) {
 }
 
 export function createPage(container,ctx,actions) {
-  const shell=base(container,'page'),root=shell.root,tools=controls(actions),notice=el('p','rr-notice');notice.setAttribute('role','status');
-  const pageHeading=el('div','rr-page-heading'),stageBox=el('section','rr-stage-box'),heading=el('div','rr-what'),mode=el('p','rr-mode'),graph=routeStage(ctx);
+  const shell=base(container,'page'),root=shell.root,tools=controls(actions,{agentFilter:false}),notice=el('p','rr-notice');notice.setAttribute('role','status');
+  const stageBox=el('section','rr-stage-box'),heading=el('div','rr-what'),mode=el('p','rr-mode'),graph=routeStage(ctx);
   const foot=el('div','rr-foot'),caption=el('p','rr-caption'),stats=el('dl','rr-stats');let captionKey='';
   const values=[l("請求"),l("改道"),l("Agent 收到的錯誤")].map(label=>{const group=el('div'),value=el('dd');group.append(value,el('dt','',label));stats.append(group);return value;});foot.append(caption,stats);
-  const story=el('div','rr-story'),storyHead=el('strong'),storyView=createStory(ctx);
-  story.append(storyHead,storyView.node);stageBox.append(mode,graph.node,foot,story); pageHeading.append(heading);
-  tools.node.classList.add('rr-root','rr-header-tools');ctx.headerActions.append(tools.node);pageHeading.append(tools.agent);
+  const story=el('div','rr-story'),storyHead=el('strong'),storyView=createStory(ctx),maskBadge=el('span','mask-badge');maskBadge.hidden=true;
+  story.append(storyHead,maskBadge,storyView.node);
+  tools.node.classList.add('rr-root','rr-header-tools');ctx.headerActions.append(tools.node);
   const context=createContextView(actions,ctx);
-  const sessionNumbers=new Map(),requests=createRequests(ctx,actions,sessionNumbers),sessions=el('div','rr-context rr-context-sessions');sessions.setAttribute('aria-label',l("Each session's context window"));
+  const sessionNumbers=new Map(),requests=createRequests(ctx,actions,sessionNumbers,graph.hueOf),sessions=el('div','rt-ctx-sess rr-context rr-context-sessions');sessions.setAttribute('aria-label',l("Each session's context window"));
   let value;
   const failedCount=stats.lastChild;failedCount.tabIndex=0;failedCount.setAttribute('role','button');failedCount.title=l('Show the latest request that failed');
   failedCount.onclick=()=>{const r=value?.filtered.find(r=>routeStatus(r).tone==='failed');if(r)actions.pick(r);};
@@ -244,12 +258,12 @@ export function createPage(container,ctx,actions) {
     sessions.hidden=groups.length<2;const nodes=[];
     if(groups.length<2){sessions.replaceChildren();sessionRows.clear();return;}
     for(const g of groups){
-      let b=sessionRows.get(g.key);if(!b){b=el('button','rr-context-session');b.type='button';sessionRows.set(g.key,b);}
+      let b=sessionRows.get(g.key);if(!b){b=el('button','rt-ctx-s rr-context-session');b.type='button';sessionRows.set(g.key,b);}
       b.dataset.session=g.key;
       const r=g.route,p=r.prompt,scale=Math.max(p.window||0,p.tokens,1),bar=el('span','ctx-stack');
       bar.setAttribute('role','img');bar.setAttribute('aria-label',l('{used} of {window} tokens used',{used:compactNumber(p.tokens),window:compactNumber(p.window||p.tokens)}));
       for(const kind of ['system','tools','skills','memory','files','results','chat']){const cell=el('i','k-'+kind);cell.style.width=((p.parts.find(p=>p.kind===kind)?.tokens||0)/scale*100).toFixed(2)+'%';bar.append(cell);}
-      b.replaceChildren(el('strong','',agentName(r.agent)+' · '+l('Session {n}',{n:sessionNumbers.get(g.key)})),el('span','',compactNumber(p.tokens)+(p.window?' / '+compactNumber(p.window)+' · '+Math.round(p.tokens/p.window*100)+'%':'')),bar);
+      b.replaceChildren(el('span','nm',agentName(r.agent)+' · '+l('Session {n}',{n:sessionNumbers.get(g.key)})),el('span','sub',agentName(r.agent)+' · '+compactNumber(p.tokens)+(p.window?' / '+compactNumber(p.window)+' · '+Math.round(p.tokens/p.window*100)+'%':'')),bar);
       b.setAttribute('aria-pressed',String(r.sessionKey===value.route?.sessionKey&&r.agent===value.route?.agent));b.onclick=()=>actions.pick(r);nodes.push(b);
     }
     const keys=new Set(groups.map(g=>g.key));for(const[key,b]of sessionRows)if(!keys.has(key)){b.remove();sessionRows.delete(key);}
@@ -260,7 +274,8 @@ export function createPage(container,ctx,actions) {
   replaySpeed.dataset.action='speed';replayPause.dataset.action='pause';replayStop.dataset.action='stop';
   seek.type='range';seek.min=0;seek.max=1000;seek.value=0;seek.setAttribute('aria-label',l('Replay position'));seek.oninput=()=>actions.replaySeek(Number(seek.value)/1000);
   replay.append(el('span','',l('Replaying')),replayClock,replaySpeed,replayPause,replayStop,replayNote,seek);replay.hidden=true;
-  const empty=el('p','rr-empty');root.append(notice,replay,pageHeading,stageBox,empty,context.node,sessions,requests.node);
+  stageBox.append(heading,mode,graph.node,foot,story,context.node,sessions);
+  const empty=el('p','rr-empty');root.append(notice,replay,stageBox,empty,requests.node);
   function renderReplay(value){
     replay.hidden=!value.replay;
     if(value.replay){const p=value.replay,clock=new Date(p.real).toLocaleTimeString(locale(),{hour12:false}),speed=l('{n}× speed',{n:p.speed}),pause=l(p.paused?'Resume':'Pause');
@@ -270,7 +285,7 @@ export function createPage(container,ctx,actions) {
   }
   let resizeFrame=0;
   const resize=new ResizeObserver(()=>{cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(()=>{resizeFrame=0;graph.node.classList.toggle('rr-narrow',root.clientWidth<560);});});resize.observe(root);
-  return {update(next){value=next;shell.update(value);graph.update(value);if(!value.visible){context.update(value);return;}tools.update(value); pageHeading.hidden=!value.route&&tools.agent.hidden;heading.hidden=!value.route;
+  return {update(next){value=next;shell.update(value);graph.update(value);if(!value.visible){context.update(value);return;}tools.update(value);heading.hidden=!value.route;
     notice.textContent=noticeText(value);notice.hidden=!notice.textContent;
     const route=value.route;stageBox.hidden=!route;empty.hidden=Boolean(route);empty.textContent=value.data.connection==='online'?l("等待請求。Agent 經過 Magpie 時，路由會在這裡出現。"):l("連接 menu bar 的 Magpie 後顯示路由。");
     if(route){
@@ -283,7 +298,7 @@ export function createPage(container,ctx,actions) {
       if(value.reduced)caption.classList.remove('rr-caption-in');caption.title=value.masked?'':caption.textContent;
       for(const[index,field]of ['requests','rerouted','errors'].entries())values[index].textContent=compactNumber(value.data.totals[field]);
       storyHead.textContent=value.follow?l("最近一個請求是怎麼路由的"):l("這個歷史請求是怎麼路由的");
-      storyView.update(route,value.masked);
+      storyView.update(route,value.masked);renderMaskBadge(maskBadge,route,Boolean(value.replaying));
     }
     for(const r of [...value.allRoutes].reverse())if(r.sessionKey&&!sessionNumbers.has(r.agent+' '+r.sessionKey))sessionNumbers.set(r.agent+' '+r.sessionKey,sessionNumbers.size+1);
     context.update(value);renderSessions(value);requests.update(value);

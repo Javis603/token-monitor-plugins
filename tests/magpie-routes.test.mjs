@@ -26,6 +26,24 @@ test('trace projection retains display metadata but excludes raw session and bod
   assert.equal(JSON.stringify(result).includes('private-session-fixture'), false);
   assert.match(result.routes[0].sessionKey, /^[a-f0-9]{64}$/);
 });
+test('masking summary keeps only counts and kind names, never the masked values', () => {
+  const row = { id: 2, agent: 'codex', order: [], tries: [{ id: 'a', entry: 'tui', entryWhy: 'off', tier: 'priority', tierServed: 'default' }],
+    masked: { n: 3, warned: 0, kinds: { EMAIL: 2, API_KEY: 1, 'jane@example.test': 9, token_lower: 4 }, values: ['jane@example.test'], snips: { x: 'sk-private-fixture' } } };
+  const route = gateway.trace({ object: 'trace', seq: 1, pid: 1, ids: [2], routes: [row], totals: { requests: 1 } }).routes[0];
+  assert.deepEqual(route.masked, { n: 3, warned: 0, kinds: { EMAIL: 2, API_KEY: 1 } });
+  assert.equal(JSON.stringify(route).includes('jane@example.test'), false);
+  assert.equal(JSON.stringify(route).includes('sk-private-fixture'), false);
+  assert.equal(route.tries[0].entry, 'tui');
+  assert.equal(route.tries[0].tier, 'priority');
+});
+test('a seat whose account the gateway rests is resting even when its failed try reported no rest', async () => {
+  const { candidateState } = await import('../plugins/magpie-routes/model.mjs');
+  const until = new Date(Date.now() + 3600e3).toISOString(), rest = { until, why: 'quota' };
+  const candidate = { id: 'a', model: 'm', provider: 'p', rest }, route = { tries: [{ id: 'a', model: 'm', done: true, status: 429, fail: 'quota' }], order: [candidate] };
+  assert.equal(candidateState(candidate, route).tone, 'resting');
+  const answered = { ...route, tries: [{ id: 'a', model: 'm', done: true, status: 200 }] };
+  assert.equal(candidateState(candidate, answered).tone, 'done');
+});
 test('historical selection shows only its selected route; live mode excludes expired completed work', () => {
   const now = Date.now(), old = { id: 1, agent: 'codex', done: true, time: new Date(now - 60000).toISOString() };
   const live = { id: 2, agent: 'codex', done: false, time: new Date(now).toISOString() };

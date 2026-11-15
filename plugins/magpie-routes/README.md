@@ -44,9 +44,9 @@ Account masking affects display only. Metadata may include tool names or file pa
 
 The main page also shows concurrent-session context, request/session/key grouping, purpose filters and metrics. It reads Magpie’s existing local routing directory for retained-day browsing and replay, and its saved allowance-card API for account windows. These reads never rewrite history, refresh a vendor allowance or change account settings. Session labels use anonymous numbers; request bodies and prompt-derived titles stay excluded.
 
-Set **Magpie data directory** to an absolute path when Magpie uses a portable or custom data folder (the folder containing settings.json and routing/). Leave it empty for the standard location. Unavailable USD cost sorting is hidden; reported credits remain visible. Damaged compressed history is skipped with an incomplete-history warning.
+Set **Magpie data directory** to an absolute path when Magpie uses a portable or custom data folder (the folder containing settings.json and routing/). Leave it empty for the standard location. The Cost metric is offered only when a price or reported credits exist. Damaged compressed history is skipped with an incomplete-history warning.
 
-Request lists show 100 requests per page. Sorting, filters, group totals and replay still use the entire selected scope.
+The request list is a bounded, scrolling card, as in Magpie, newest first, and draws 100 more requests as you scroll. Filters, group totals and replay still use the entire selected scope.
 
 ## License and maintenance
 

@@ -40,6 +40,8 @@ export function candidateState(candidate, route, lifted = {}, now = Date.now()) 
     if (!last.done) return { tone: 'working', label: l("回應中"), selected: true, attempts };
     if(liveRest(last.rest))return {tone:'resting',label:reasonName(last.rest.why||last.rest.kind),until:last.rest.until,rest:last.rest,attempts};
     if (last.fail === 'canceled') return { tone: 'done', label: l('Canceled'), selected: false, attempts };
+    // The account's own rest, as the gateway weighed it, counts as well as the one this try reported (Magpie's findings/rests).
+    if ((last.status >= 400 || last.fail) && liveRest(candidate.rest)) return {tone:'resting',label:reasonName(candidate.rest.why||candidate.rest.kind),until:candidate.rest.until,rest:candidate.rest,attempts};
     if (last.status >= 400 || last.fail) return { tone: 'failed', label: reasonName(last.fail) || `HTTP ${last.status || route.status}`, selected: false, attempts };
     return { tone: 'done', label: l("回答了這個請求"), selected: true, attempts };
   }

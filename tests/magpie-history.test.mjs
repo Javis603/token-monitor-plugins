@@ -81,6 +81,16 @@ test('live daily tallies are complete beyond the displayed history limit and app
   fs.appendFileSync(file,JSON.stringify(row(2006))+'\n');assert.equal((await history()).tallies[0].tried,2006);assert.equal((await history()).tallies[0].tried,2006);
   await assert.rejects(history(0),/Invalid/);
 });
+test('daily tallies keep an account on each plan apart and count failures by reason',async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'magpie-history-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const history=createHistory(dir,undefined,()=>new Date('2026-11-10T12:00:00'));
+  const account=plan=>({id:'a-'+plan,provider:'codex',kind:'account',who:'account@example.test',plan,model:'m'});
+  const row=(id,plan,tries)=>raw(id,{order:[account(plan)],tries:tries.map(t=>({id:'a-'+plan,model:'m',done:true,...t}))});
+  fs.writeFileSync(path.join(dir,'2026-11-10.jsonl'),[row(1,'plus',[{status:200}]),row(2,'pro',[{status:429,fail:'quota'},{status:429,fail:'quota'},{status:500}])].map(r=>JSON.stringify(r)).join('\n')+'\n');
+  const tallies=(await history()).tallies,byPlan=Object.fromEntries(tallies.map(x=>[x.candidate.plan,x]));
+  assert.equal(tallies.length,2);assert.equal(byPlan.plus.tried,1);assert.equal(byPlan.pro.tried,3);
+  assert.deepEqual(byPlan.pro.fails,{quota:2,other:1});assert.deepEqual(byPlan.plus.fails,{});
+});
 test('folded quota uses distinct accounts on one plan and leaves mismatched readings separate',async()=>{
   const {foldQuota}=await import('../plugins/magpie-routes/requests.mjs');
   const candidates=['one','two'].map(who=>({kind:'account',provider:'codex',who}));
