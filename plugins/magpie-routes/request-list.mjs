@@ -199,7 +199,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
   const fitObserver=new ResizeObserver(()=>{askFit();sideFit();});fitObserver.observe(node);observers.push(fitObserver);
   let value,costAvailable=false,days=[],unseenDays=[];
   const closedGroups=new Set(),keysOpen=new Set(),keysShut=new Set();
-  let shownRows=CHUNK,scopeKey='',lastKey='',lastRows=[],lastCards,lastTallies,lastSelection='';
+  let restTimer=0,shownRows=CHUNK,scopeKey='',lastKey='',lastRows=[],lastCards,lastTallies,lastSelection='';
   const reqRows=new Map(),groupRows=new Map(),dayButtons=new Map(),keyRows=new Map(),provHeads=new Map(),provBoxes=new Map();
   const moreDays=el('button','rt-day rt-day-more');moreDays.type='button';moreDays.setAttribute('aria-haspopup','menu');moreDays.setAttribute('aria-expanded','false');
   moreDays.onclick=e=>{e.stopPropagation();openMenu(moreDays,unseenDays.map(d=>({v:d.day,name:dayName(d.day),note:fmtN(d.requests)})),[value.historyDay],([v]=[])=>{},'rt-days-menu');
@@ -385,6 +385,10 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     // A provider is one box: its accounts stay together, ordered by the first of them, so a name that changed does not split it.
     const byProvider=new Map();for(const a of ordered)byProvider.has(a.w.provider)?byProvider.get(a.w.provider).push(a):byProvider.set(a.w.provider,[a]);
     const list=[...byProvider.values()].flat();
+    // With no new push, a rest that ends or a countdown still has to move: wake at the earliest end, at least every 30s. A replay has its own clock.
+    clearTimeout(restTimer);restTimer=0;
+    const ends=list.flatMap(a=>[a.rest,...[...a.mrests.values()].map(x=>x.rest)]).filter(Boolean).map(r=>at(r.until)).filter(u=>u>n);
+    if(value.clock==null&&ends.length)restTimer=setTimeout(()=>{restTimer=0;if(value?.visible)render(true);},Math.max(1000,Math.min(Math.min(...ends)-n+50,30000)));
     setText(actLabel,t('Accounts and keys'));setText(actNote,t(!value.historyDay&&value.tallies?.length?"over today's requests":'over those requests'));
     actError.textContent=value.cardsError||'';actError.hidden=!value.cardsError;
     actRead.hidden=!!value.historyDay||!list.some(a=>a.w.kind==='account');
@@ -511,7 +515,9 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     const groupKeys=new Set(groups.map(g=>g.key));for(const k of groupRows.keys())if(!groupKeys.has(k)){groupRows.delete(k);closedGroups.delete(k);}
     const live=new Set(sorted.map(requestKey));for(const k of reqRows.keys())if(!live.has(k))reqRows.delete(k);
     // A selected request beyond the rows drawn is brought into the list.
-    const selectedAt=selection&&!value.follow?sorted.findIndex(r=>requestKey(r)===selection):-1;
+    // Counted in the order the list draws them, so a By session or By key list loads as far as the selected request sits in its group.
+    let selectedAt=-1;
+    if(selection&&!value.follow){let before=0;for(const g of groups){if(grouped&&closedGroups.has(g.key))continue;const idx=g.rows.findIndex(r=>requestKey(r)===selection);if(idx>=0){selectedAt=before+idx;break;}before+=g.rows.length;}}
     if(selection!==lastSelection&&selectedAt>=shownRows)shownRows=Math.ceil((selectedAt+1)/CHUNK)*CHUNK;
     const els=[];let drawn=0;
     for(const g of groups){
@@ -534,5 +540,5 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     if(!value||reqs.scrollTop+reqs.clientHeight<reqs.scrollHeight-160)return;
     const total=value.filtered.length;if(shownRows<total){shownRows+=CHUNK;render(true);}
   },{passive:true});
-  return {node,update(next){value=next;render();},dispose(){closeMenu();cancelAnimationFrame(fitSoon);cancelAnimationFrame(sideSoon);cancelAnimationFrame(metaSoon);for(const o of observers)o.disconnect();reqRows.clear();groupRows.clear();dayButtons.clear();keyRows.clear();provHeads.clear();provBoxes.clear();node.remove();}};
+  return {node,update(next){value=next;render();},dispose(){closeMenu();clearTimeout(restTimer);cancelAnimationFrame(fitSoon);cancelAnimationFrame(sideSoon);cancelAnimationFrame(metaSoon);for(const o of observers)o.disconnect();reqRows.clear();groupRows.clear();dayButtons.clear();keyRows.clear();provHeads.clear();provBoxes.clear();node.remove();}};
 }

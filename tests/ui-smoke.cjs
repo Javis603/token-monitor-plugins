@@ -270,6 +270,9 @@ app.whenReady().then(async () => {
       Date.now=()=>realNow()+1800e3;pushMagpie(withRest({until:fixedUntil,why:'quota',key:'k-account'}));await wait();
       const after=text();Date.now=realNow;
       check('rest-countdown-follows-the-clock-without-new-requests',Boolean(before)&&before!==after);
+      {const soon=new Date(Date.now()+1100).toISOString();pushMagpie(withRest({until:soon,why:'quota',key:'k-account'}));await wait();
+        const resting=restCount()===base+1;await new Promise(r=>setTimeout(r,2300));
+        check('rest-ending-clears-the-account-without-any-push',resting&&restCount()===base);}
       pushMagpie(structuredClone(readonlyFixture));await wait();
     }
     {const wait=()=>new Promise(r=>setTimeout(r,80)),route=structuredClone(readonlyRows[0]),base=route.order[0];
@@ -347,6 +350,14 @@ app.whenReady().then(async () => {
     root.querySelector('[data-group-by="request"]').click();
     const points=[...root.querySelectorAll('.ctx-spark .hit')];points[0]?.dispatchEvent(new MouseEvent('click',{bubbles:true}));
     check('history-spark-selection-reveals-request',root.querySelectorAll('.rt-req[aria-pressed="true"]').length===1);
+    {const mixed=Array.from({length:151},(_,i)=>({...structuredClone(historyPast[0]),id:30000+i,time:new Date(Date.UTC(2026,10,9,0,0,0)+(151-i)*1000).toISOString(),sessionKey:i===50?'pick-session-b':'pick-session-a',kind:'',tokens:i+1}));
+      historyFixtures['2026-11-09']={...savedHistory,routes:mixed};root.querySelectorAll('.rt-days .rt-day')[1].click();await settle();root.querySelectorAll('.rt-days .rt-day')[2].click();await settle();
+      const byId=id=>root.querySelector('.rt-req[data-request-id="'+id+'"]');
+      check('picked-request-is-in-the-first-100',pageRows().length===100&&Boolean(byId(30050)));
+      byId(30050).click();await settle();
+      root.querySelector('[data-group-by="session"]').click();await settle();
+      check('grouped-list-loads-far-enough-to-show-the-selected-request',Boolean(byId(30050))&&byId(30050).getAttribute('aria-pressed')==='true');
+      root.querySelector('[data-group-by="request"]').click();await settle();}
     historyFixtures['2026-11-09']=savedHistory;document.querySelector('.rr-back-live').click();
     check('history-return-to-live-resets-the-list',pageRows().length===5);
     root.querySelector('.rr-context:not(.rr-context-sessions)').scrollIntoView({block:'start'});await new Promise(r=>setTimeout(r,120));
