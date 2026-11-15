@@ -21,6 +21,7 @@ CI (`verify.yml`) runs `npm test` and `npm run check` on Node 22 and 24. The Ele
 - **A shipped version needs all six changelogs.** `CHANGELOG.md`, `.zh-CN`, `.zh-TW`, `.ko`, `.ja` and `.pt-BR`, each with a `## <version>` section. The catalog reads them from the package bytes. Update the READMEs when behaviour they describe changes.
 - **Package every file.** A module, stylesheet or asset the plugin loads must be listed in its manifest (`files`, and `css` for stylesheets). `npm run check` rejects an import that is not packaged.
 - **The host contract is a floor.** Magpie Routes needs `context.headerActions` and host 0.81.0 or newer. Keep the manifest, the catalog `--app-range` in `publish.yml` and the docs in step if it changes.
+- **A plugin owns its subtree.** It styles only what it renders: no host DOM classes, no `!important` beyond its own `[hidden]` and reduced-motion overrides, and no second copy of host chrome (headings, materials, toolbars) when an outlet is missing.
 - **This repository is public.** No local paths, accounts, tokens, private screenshots or personal workflow in code, tests, docs, commits or PR text.
 - **Keep upstream attribution.** Keep each plugin's `LICENSE`, upstream license file and `SOURCE-NOTICE.md`. Cite an upstream revision by its full 40-character SHA; a mistyped short one stops resolving.
 - **Titles are conventional.** `type(scope): subject` with the plugin id as scope, for example `fix(magpie-routes): ...`, as in the history.
