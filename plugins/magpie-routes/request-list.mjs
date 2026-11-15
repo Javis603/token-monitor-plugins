@@ -47,8 +47,8 @@ const tryOk=tr=>tr.status<400&&!tr.fail;
 const at=s=>typeof s==='string'?new Date(s).getTime():Number(s)||0;
 const known0=s=>s&&!String(s).startsWith('0001-');
 const failWord=(why,rest)=>words().failure(why,rest);
-const restSay=rest=>{const w=words(),why=rest.why||rest.kind,kindless=!why||why==='other'||!w.failure(why,rest)||w.failure(why,rest)===why;
-  return (kindless&&rest.status?rest.status+' · ':'')+w.failure(why,rest)+' · '+w.rest(rest);};
+const restSay=(rest,n)=>{const w=words(),why=rest.why||rest.kind,kindless=!why||why==='other'||!w.failure(why,rest)||w.failure(why,rest)===why;
+  return (kindless&&rest.status?rest.status+' · ':'')+w.failure(why,rest)+' · '+w.rest(rest,n);};
 
 function outcome(r,masked){
   const who=w=>w.kind==='provider'?w.name:(w.who||w.name||w.provider),named=w=>{
@@ -419,7 +419,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
       if(w.kind==='provider')name.append(el('b','',w.model||w.name));else name.append(el('b','',''),el('span','',planName(w.plan)||(w.kind==='key'?t('API key'):'')));
       if(w.kind!=='provider')name.firstChild.append(accountText(w));
       let st,cls='',asOf='',carded=false,readError='';const resting=a.rest&&at(a.rest.until)>n,grid=winsBy.get(a),parts=resting?[]:[...a.mrests].filter(([,x])=>at(x.rest.until)>n).sort(([m,x],[l,y])=>at(x.rest.until)-at(y.rest.until)||m.localeCompare(l));
-      if(resting){st=restSay(a.rest);cls='rest';}
+      if(resting){st=restSay(a.rest,n);cls='rest';}
       else if(w.unlisted){st=unlistedWord(w);cls='left';}
       else if(grid){st='';if(w.known)asOf=t('as of {time}',{time:clock(a.at)});}
       else if(w.known){const soon=usedRenews(w);
@@ -446,7 +446,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
           line.append(el('span','k',p.k),bar,el('span','v',p.v),el('span','r',p.r));box.append(line);}
         box.title=[...grid.map(p=>p.tip),asOf].filter(Boolean).join('\n');row.append(box);
       }
-      if(parts.length){const part=el('div','st rest part',parts.map(([m])=>m).join(', ')+' · '+restSay(parts[0][1].rest));if(parts[0][1].rest.error)part.title=parts[0][1].rest.error;row.append(part);}
+      if(parts.length){const part=el('div','st rest part',parts.map(([m])=>m).join(', ')+' · '+restSay(parts[0][1].rest,n));if(parts[0][1].rest.error)part.title=parts[0][1].rest.error;row.append(part);}
       if(ws.length&&!figure){const line=el('div','wins');line.append(...ws.map(text=>el('span','',text)));if(ws.length>1)line.title=ws.join('\n');row.append(line);}
       row.append(tally);
       if(signIn){const fix=el('div','fix');fix.append(el('span','link rt-signin',failWord('auth')));row.append(fix);}
@@ -481,8 +481,8 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     if(!value?.visible)return;
     const sorted=sortRequests(value.filtered,'newest'),selection=value.route?requestKey(value.route):'';
     costAvailable=value.filtered.some(r=>(r.priced&&Number.isFinite(r.cost))||r.usage?.some(u=>u.credits!=null));
-    const scope=JSON.stringify([groupBy,value.historyDay,value.filter,value.purpose,[...visibleMetrics]]);
-    if(scope!==scopeKey){scopeKey=scope;shownRows=CHUNK;}
+    const scope=JSON.stringify([groupBy,value.historyDay,value.filter,value.purpose]);
+    if(scope!==scopeKey){scopeKey=scope;shownRows=CHUNK;lastSelection='';}
     const key=JSON.stringify([shownRows,groupBy,[...visibleMetrics],[...closedGroups],[...keysOpen],[...keysShut],actsAll,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,sorted.some(r=>!r.done)?Math.floor(Date.now()/1000):0,Math.floor((value.clock??Date.now())/30000),JSON.stringify(value.data?.lifted||{}),locale()]);
     if(!force&&key===lastKey&&lastCards===value.cards&&lastTallies===value.tallies&&lastRows.length===sorted.length&&lastRows.every((r,i)=>r===sorted[i]))return;
     lastKey=key;lastCards=value.cards;lastTallies=value.tallies;lastRows=sorted;

@@ -290,7 +290,7 @@ app.whenReady().then(async () => {
       historyFixtures[''].tallies=[];pushMagpie(structuredClone(readonlyFixture));root.querySelector('.rt-days .rt-day').click();await wait();
     }
     check('accounts-retain-mask-for-live-readings',[...root.querySelectorAll('.rt-act .nm .rr-pii')].every(n=>getComputedStyle(n).filter.includes('blur')));
-    root.querySelector('[data-group-by="session"]').click();check('requests-group-by-session',root.querySelectorAll('.rt-session').length===3);
+    root.querySelector('[data-group-by="session"]').click();check('requests-group-by-session',root.querySelectorAll('.rt-session').length===3);{const head=root.querySelector('.rt-session'),list=root.querySelector('.rt-reqs');check('request-group-heading-spans-the-grid',head.getBoundingClientRect().width>=list.clientWidth-16&&getComputedStyle(head).display==='flex');}
     const sessionLabelsMatch=()=>[...root.querySelectorAll('.rr-context-session')].every(card=>{
       const r=readonlyRows.find(r=>r.agent+' '+r.sessionKey===card.dataset.session);
       let row=root.querySelector('.rt-req[data-request-id="'+r.id+'"]');
