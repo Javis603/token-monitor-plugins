@@ -252,6 +252,29 @@ app.whenReady().then(async () => {
     check('accounts-list-every-window-on-its-own-line',[...root.querySelectorAll('.rt-act .wq')].some(box=>box.children.length===2&&box.querySelector('.k')&&box.querySelector('.r')));
     check('accounts-show-allowance-windows-and-wallet-expiry',[...root.querySelectorAll('.rt-act .wq')].some(box=>/(?:^|[^\\d.])5 USD\\s*(?:將於|expire)/.test(box.title)&&box.title.includes('25 USD')));
     check('account-window-columns-start-at-one-place',(()=>{const ks=[...root.querySelectorAll('.rt-act .wq .k')].map(n=>Math.round(n.getBoundingClientRect().width));return ks.length>1&&new Set(ks).size===1;})());
+    {const wait=()=>new Promise(r=>setTimeout(r,60)),restCount=()=>root.querySelectorAll('.rt-act.rest').length,base=restCount();
+      const withRest=(rest,change={})=>{const f=structuredClone(readonlyFixture);f.routes[0].order[0].rest=rest;Object.assign(f,change);return f;};
+      const hour=()=>new Date(Date.now()+3600e3).toISOString();
+      pushMagpie(withRest({until:hour(),why:'rate',model:'gpt-6.1-sol',key:'k-model'}));await wait();
+      check('model-only-rest-does-not-rest-the-account',restCount()===base&&root.querySelectorAll('.rt-act .st.part').length>=1);
+      pushMagpie(withRest({until:hour(),why:'quota',key:'k-account'}));await wait();
+      check('account-rest-rests-the-account',restCount()===base+1);
+      const lifted=withRest({until:hour(),why:'quota',key:'k-account'},{lifted:{'k-account':new Date().toISOString()}});
+      pushMagpie(lifted);await wait();
+      check('hand-lifted-rest-no-longer-rests-the-account',restCount()===base);
+      const fixedUntil=hour();pushMagpie(withRest({until:fixedUntil,why:'quota',key:'k-account'}));await wait();
+      const text=()=>root.querySelector('.rt-act.rest .st.rest')?.textContent||'',before=text(),realNow=Date.now;
+      Date.now=()=>realNow()+1800e3;pushMagpie(withRest({until:fixedUntil,why:'quota',key:'k-account'}));await wait();
+      const after=text();Date.now=realNow;
+      check('rest-countdown-follows-the-clock-without-new-requests',Boolean(before)&&before!==after);
+      pushMagpie(structuredClone(readonlyFixture));await wait();
+    }
+    {const wait=()=>new Promise(r=>setTimeout(r,80)),account=structuredClone(readonlyRows[0].order[0]);
+      historyFixtures[''].tallies=[{key:'tally-account',candidate:account,at:Date.now(),tried:3,ok:2,failed:1,fails:{quota:1},models:[]}];
+      pushMagpie({...structuredClone(readonlyFixture),routes:[]});root.querySelector('.rt-days .rt-day').click();await wait();
+      check('todays-accounts-stay-without-live-requests',root.querySelector('.rt-reqs.none')&&!root.querySelector('.rt-cols').classList.contains('solo')&&root.querySelectorAll('.rt-acts .rt-act').length>0);
+      historyFixtures[''].tallies=[];pushMagpie(structuredClone(readonlyFixture));root.querySelector('.rt-days .rt-day').click();await wait();
+    }
     check('accounts-retain-mask-for-live-readings',[...root.querySelectorAll('.rt-act .nm .rr-pii')].every(n=>getComputedStyle(n).filter.includes('blur')));
     root.querySelector('[data-group-by="session"]').click();check('requests-group-by-session',root.querySelectorAll('.rt-session').length===3);
     const sessionLabelsMatch=()=>[...root.querySelectorAll('.rr-context-session')].every(card=>{

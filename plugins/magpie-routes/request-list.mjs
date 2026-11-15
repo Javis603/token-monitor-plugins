@@ -293,15 +293,22 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
   }
 
   // ---- accounts and keys ----
+  // A rest is the account's, or one model's alone (Magpie restModel): a model resting does not rest its account.
+  const restModel=(rest,m)=>rest.model||(m&&rest.key?.endsWith('/'+m)?m:'');
+  const modelRest=(a,m,rest,when)=>{if((a.mrests.get(m)?.at||0)<=when)a.mrests.set(m,{rest,at:when});};
   function foldActs(rows){
     const by=new Map(),seed=!value.historyDay&&!value.purpose.length&&value.tallies?.length?value.tallies:null;
-    if(seed)for(const x of seed)by.set(accountKey(x.candidate),{w:x.candidate,tried:x.tried,ok:x.ok,fails:x.fails?{...x.fails}:x.failed?{other:x.failed}:{},last:x.last||0,authAt:0,rest:x.candidate.rest||null,restAt:x.at||0,seen:0,pos:0,at:x.at,models:new Set(x.models||[]),mrests:new Map()});
+    if(seed)for(const x of seed)by.set(accountKey(x.candidate),{w:x.candidate,tried:x.tried,ok:x.ok,fails:x.fails?{...x.fails}:x.failed?{other:x.failed}:{},last:x.last||0,authAt:0,rest:null,restAt:0,seen:0,pos:0,at:x.at,models:new Set(x.models||[]),mrests:new Map()});
+    const seeded=x=>{const rest=x.candidate.rest;if(!rest)return;const a=by.get(accountKey(x.candidate)),rm=restModel(rest,x.candidate.model);if(rm)modelRest(a,rm,rest,x.at||0);else{a.rest=rest;a.restAt=x.at||0;}};
+    if(seed)for(const x of seed)seeded(x);
     for(const r of [...rows].reverse()){
       const candidates=new Map(),T=at(r.time);
       r.order.forEach((w,i)=>{
         const key=accountKey(w),a=by.get(key)||{w,tried:0,ok:0,fails:{},last:0,authAt:0,rest:null,restAt:0,seen:0,pos:0,models:new Set(),mrests:new Map()};
         a.w=w;a.seen++;a.pos=i;a.at=r.time;
-        if(T>=a.restAt){a.rest=w.rest||null;a.restAt=T;}
+        const rm=w.rest?restModel(w.rest,w.model):'';
+        if(rm)modelRest(a,rm,w.rest,T);else if(T>=a.restAt){a.rest=w.rest||null;a.restAt=T;}
+        if(!w.rest&&w.model&&(a.mrests.get(w.model)?.at||0)<=T)a.mrests.delete(w.model);
         by.set(key,a);candidates.set(w.id,a);
       });
       for(const tr of r.tries){
@@ -311,7 +318,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
         if(seed){if(tryOk(tr))a.last=Math.max(a.last,end);}
         else{a.tried++;if(tryOk(tr)){a.ok++;a.last=Math.max(a.last,end);const m=tr.model||r.order.find(x=>x.id===tr.id)?.model;if(m)a.models.add(m);}
           else{const k=tr.fail==='quota'&&tr.rest?.rate?'rate':tr.fail||'other';a.fails[k]=(a.fails[k]||0)+1;}}
-        if(tr.rest&&end>=a.restAt){a.rest=tr.rest;a.restAt=end;}
+        if(tr.rest){const rm=restModel(tr.rest,tr.model||r.order.find(x=>x.id===tr.id)?.model);if(rm)modelRest(a,rm,tr.rest,end);else if(end>=a.restAt){a.rest=tr.rest;a.restAt=end;}}
       }
     }
     return by;
@@ -368,7 +375,13 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     row.classList.add('said');row.replaceChildren(name,el('div','st'+(resting===ks.length?' rest':''),st.join(' · ')),tally);return row;
   }
   function renderActs(rows){
-    const n=value.clock??Date.now(),list=[...foldActs(rows).values()].sort((x,y)=>(x.w.name||'').localeCompare(y.w.name||'')||x.w.provider.localeCompare(y.w.provider)||(x.w.rank||0)-(y.w.rank||0)||x.pos-y.pos);
+    const n=value.clock??Date.now(),liftedAt=value.data?.lifted||{};
+    // A rest lifted by hand since the request that found it is over (Magpie lifted()).
+    const lifted=(key,found)=>{const l=Date.parse(liftedAt[key])||0;return !!key&&l>=found&&l<=n;};
+    const list=[...foldActs(rows).values()].map(a=>{
+      const rest=a.rest&&lifted(a.rest.key,a.restAt)?null:a.rest,live=[...a.mrests].filter(([,x])=>!lifted(x.rest.key,x.at));
+      return rest===a.rest&&live.length===a.mrests.size?a:{...a,rest,mrests:new Map(live)};
+    }).sort((x,y)=>(x.w.name||'').localeCompare(y.w.name||'')||x.w.provider.localeCompare(y.w.provider)||(x.w.rank||0)-(y.w.rank||0)||x.pos-y.pos);
     setText(actLabel,t('Accounts and keys'));setText(actNote,t(!value.historyDay&&value.tallies?.length?"over today's requests":'over those requests'));
     actError.textContent=value.cardsError||'';actError.hidden=!value.cardsError;
     actRead.hidden=!!value.historyDay||!list.some(a=>a.w.kind==='account');
@@ -402,7 +415,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
       const row=el('div','rt-act'),name=el('div','nm');
       if(w.kind==='provider')name.append(el('b','',w.model||w.name));else name.append(el('b','',''),el('span','',planName(w.plan)||(w.kind==='key'?t('API key'):'')));
       if(w.kind!=='provider')name.firstChild.append(accountText(w));
-      let st,cls='',asOf='',carded=false,readError='';const resting=a.rest&&at(a.rest.until)>n,grid=winsBy.get(a);
+      let st,cls='',asOf='',carded=false,readError='';const resting=a.rest&&at(a.rest.until)>n,grid=winsBy.get(a),parts=resting?[]:[...a.mrests].filter(([,x])=>at(x.rest.until)>n).sort(([m,x],[l,y])=>at(x.rest.until)-at(y.rest.until)||m.localeCompare(l));
       if(resting){st=restSay(a.rest);cls='rest';}
       else if(w.unlisted){st=unlistedWord(w);cls='left';}
       else if(grid){st='';if(w.known)asOf=t('as of {time}',{time:clock(a.at)});}
@@ -430,6 +443,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
           line.append(el('span','k',p.k),bar,el('span','v',p.v),el('span','r',p.r));box.append(line);}
         box.title=[...grid.map(p=>p.tip),asOf].filter(Boolean).join('\n');row.append(box);
       }
+      if(parts.length){const part=el('div','st rest part',parts.map(([m])=>m).join(', ')+' · '+restSay(parts[0][1].rest));if(parts[0][1].rest.error)part.title=parts[0][1].rest.error;row.append(part);}
       if(ws.length&&!figure){const line=el('div','wins');line.append(...ws.map(text=>el('span','',text)));if(ws.length>1)line.title=ws.join('\n');row.append(line);}
       row.append(tally);
       if(signIn){const fix=el('div','fix');fix.append(el('span','link rt-signin',failWord('auth')));row.append(fix);}
@@ -439,7 +453,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
       name.prepend(el('i','dot'));
       const mdls=[...a.models].filter(m=>!(w.kind==='provider'&&m===w.model));
       row.title=[value.masked&&w.kind==='account'?'':w.id,mdls.join(', '),said&&!act?[...tally.children].map(e=>e.textContent).join(' · '):''].filter(Boolean).join('\n');
-      put(row,false,opened||signIn||resting||(!a.ok&&Object.keys(a.fails).length>0));
+      put(row,false,opened||signIn||resting||parts.length>0||(!a.ok&&Object.keys(a.fails).length>0));
     }
     const hide=new Set(),seen=new Set();let shown=0,hidden=0;
     for(const b of out){const m=meta.get(b);if(m.keep)seen.add(m.prov);else if(shown<ACTS_SHOWN){shown+=m.n;seen.add(m.prov);}else hide.add(b);}
@@ -458,7 +472,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     costAvailable=value.filtered.some(r=>(r.priced&&Number.isFinite(r.cost))||r.usage?.some(u=>u.credits!=null));
     const scope=JSON.stringify([groupBy,value.historyDay,value.filter,value.purpose,[...visibleMetrics]]);
     if(scope!==scopeKey){scopeKey=scope;shownRows=CHUNK;}
-    const key=JSON.stringify([shownRows,groupBy,[...visibleMetrics],[...closedGroups],[...keysOpen],[...keysShut],actsAll,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,sorted.some(r=>!r.done)?Math.floor(Date.now()/1000):0,locale()]);
+    const key=JSON.stringify([shownRows,groupBy,[...visibleMetrics],[...closedGroups],[...keysOpen],[...keysShut],actsAll,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,sorted.some(r=>!r.done)?Math.floor(Date.now()/1000):0,Math.floor((value.clock??Date.now())/30000),locale()]);
     if(!force&&key===lastKey&&lastCards===value.cards&&lastTallies===value.tallies&&lastRows.length===sorted.length&&lastRows.every((r,i)=>r===sorted[i]))return;
     lastKey=key;lastCards=value.cards;lastTallies=value.tallies;lastRows=sorted;
     const allPurposes=[...new Set([...value.allRoutes.map(requestPurpose),...value.purpose])];
@@ -474,13 +488,13 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     const by=groupBy==='key'&&!value.allRoutes.some(r=>r.callerKey)?'request':groupBy;
     for(const b of groupButtons){setText(b,t(b.dataset.label));b.classList.toggle('on',by===b.dataset.groupBy);setAttr(b,'aria-pressed',String(by===b.dataset.groupBy));if(b.dataset.groupBy==='key')b.hidden=!value.allRoutes.some(r=>r.callerKey);}
     groupBar.hidden=!sorted.length;
-    const none=!sorted.length;reqNote.hidden=none&&!value.historyLoading;reqs.classList.toggle('none',none);colB.hidden=none;hist.classList.toggle('solo',none);
-    hist.hidden=none&&!value.historyDay&&!value.historyDays.length&&!value.purpose.length&&!value.allRoutes.length;
+    const none=!sorted.length,tallied=!value.historyDay&&!value.purpose.length&&value.tallies?.length>0;reqNote.hidden=none&&!value.historyLoading;reqs.classList.toggle('none',none);colB.hidden=none&&!tallied;hist.classList.toggle('solo',colB.hidden);
+    hist.hidden=none&&!tallied&&!value.historyDay&&!value.historyDays.length&&!value.purpose.length&&!value.allRoutes.length;
     if(none){
       const p=el('div','empty-state');
       p.append(el('b','',value.purpose.length?t('No requests match these filters.'):value.historyDay?t('Nothing on {day}',{day:dayName(value.historyDay)}):t('No requests since magpie started')),t('Each request an agent sends through magpie shows up here: who answered it, why, and each try.'));
       if(!value.historyDay&&value.historyDays.length)p.append(' '+t('Earlier ones are kept by day, in the bar above.'));
-      reqs.replaceChildren(p);foldAll.hidden=true;reqRows.clear();groupRows.clear();renderActs(sorted);return;
+      reqs.replaceChildren(p);foldAll.hidden=true;reqRows.clear();groupRows.clear();renderActs(sorted);sideFit();return;
     }
     const grouped=by==='key'||by==='session'&&sorted.some(r=>r.sessionKey),groups=grouped?groupRequests(sorted,by):sorted.map(r=>({key:requestKey(r),rows:[r],route:r}));
     const groupKeys=new Set(groups.map(g=>g.key));for(const k of groupRows.keys())if(!groupKeys.has(k)){groupRows.delete(k);closedGroups.delete(k);}
