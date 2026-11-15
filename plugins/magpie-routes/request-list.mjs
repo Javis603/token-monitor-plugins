@@ -378,10 +378,13 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     const n=value.clock??Date.now(),liftedAt=value.data?.lifted||{};
     // A rest lifted by hand since the request that found it is over (Magpie lifted()).
     const lifted=(key,found)=>{const l=Date.parse(liftedAt[key])||0;return !!key&&l>=found&&l<=n;};
-    const list=[...foldActs(rows).values()].map(a=>{
+    const ordered=[...foldActs(rows).values()].map(a=>{
       const rest=a.rest&&lifted(a.rest.key,a.restAt)?null:a.rest,live=[...a.mrests].filter(([,x])=>!lifted(x.rest.key,x.at));
       return rest===a.rest&&live.length===a.mrests.size?a:{...a,rest,mrests:new Map(live)};
     }).sort((x,y)=>(x.w.name||'').localeCompare(y.w.name||'')||x.w.provider.localeCompare(y.w.provider)||(x.w.rank||0)-(y.w.rank||0)||x.pos-y.pos);
+    // A provider is one box: its accounts stay together, ordered by the first of them, so a name that changed does not split it.
+    const byProvider=new Map();for(const a of ordered)byProvider.has(a.w.provider)?byProvider.get(a.w.provider).push(a):byProvider.set(a.w.provider,[a]);
+    const list=[...byProvider.values()].flat();
     setText(actLabel,t('Accounts and keys'));setText(actNote,t(!value.historyDay&&value.tallies?.length?"over today's requests":'over those requests'));
     actError.textContent=value.cardsError||'';actError.hidden=!value.cardsError;
     actRead.hidden=!!value.historyDay||!list.some(a=>a.w.kind==='account');
@@ -462,10 +465,18 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     actMore.hidden=!hide.size;setText(actMore,actsAll?t('Show fewer'):t('Show {n} more',{n:hidden}));setAttr(actMore,'aria-expanded',String(actsAll));
     actFoot.hidden=actMore.hidden;
     const runs=[];for(const b of actsAll?out:out.filter(b=>!hide.has(b))){const p=meta.get(b).prov,last=runs.at(-1);if(last&&last.p===p)last.bs.push(b);else runs.push({p,bs:[b]});}
-    const boxes=runs.map(({p,bs})=>{let g=provBoxes.get(p);if(!g)provBoxes.set(p,g=el('div','rt-pgrp'));placeRows(g,bs.flat());g.classList.toggle('long',bs.reduce((x,b)=>x+meta.get(b).n,0)>12);return g;});
+    const boxes=runs.map(({p,bs})=>{let g=provBoxes.get(p);if(!g)provBoxes.set(p,g=el('div','rt-pgrp'));patch(g,bs.flat());g.classList.toggle('long',bs.reduce((x,b)=>x+meta.get(b).n,0)>12);return g;});
     placeRows(acts,boxes);
   }
 
+  // Put a list's new rows in, keeping each old node that says the same (Magpie patch).
+  function patch(box,rows){
+    const old=[...box.children],same=(r,o)=>o&&!r.querySelector('button')&&r.isEqualNode(o);
+    if(old.length===rows.length&&rows.every((r,i)=>same(r,old[i])))return;
+    rows=rows.map((r,i)=>same(r,old[i])?old[i]:r);
+    rows.forEach((r,i)=>{if(box.children[i]!==r)box.insertBefore(r,box.children[i]||null);});
+    while(box.children.length>rows.length)box.lastElementChild.remove();
+  }
   function render(force=false){
     if(!value?.visible)return;
     const sorted=sortRequests(value.filtered,'newest'),selection=value.route?requestKey(value.route):'';

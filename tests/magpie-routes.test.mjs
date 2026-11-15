@@ -48,6 +48,16 @@ test('every locale defines the same wording keys as English', async () => {
   const dictionaries = (await import('../plugins/magpie-routes/locales.mjs')).default, english = Object.keys(dictionaries.en).sort();
   for (const [locale, dictionary] of Object.entries(dictionaries)) assert.deepEqual(Object.keys(dictionary).sort(), english, locale);
 });
+test('a lift counts only after the try that found the rest ended', async () => {
+  const { candidateState } = await import('../plugins/magpie-routes/model.mjs');
+  const start = Date.parse('2026-11-10T10:00:00.000Z'), until = new Date(start + 3600e3).toISOString(), rest = { until, why: 'quota', key: 'k' };
+  const candidate = { id: 'a', model: 'm', provider: 'p' }, route = { time: new Date(start).toISOString(), order: [candidate],
+    tries: [{ id: 'a', model: 'm', done: true, status: 429, fail: 'quota', start: new Date(start + 1000).toISOString(), ms: 500, rest }] };
+  const now = start + 2000;
+  // lifted after the request began but before this try ended: the rest was found later, so it stands
+  assert.equal(candidateState(candidate, route, { k: new Date(start + 1200).toISOString() }, now).tone, 'resting');
+  assert.notEqual(candidateState(candidate, route, { k: new Date(start + 1700).toISOString() }, now).tone, 'resting');
+});
 test('historical selection shows only its selected route; live mode excludes expired completed work', () => {
   const now = Date.now(), old = { id: 1, agent: 'codex', done: true, time: new Date(now - 60000).toISOString() };
   const live = { id: 2, agent: 'codex', done: false, time: new Date(now).toISOString() };

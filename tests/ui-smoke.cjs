@@ -272,6 +272,14 @@ app.whenReady().then(async () => {
       check('rest-countdown-follows-the-clock-without-new-requests',Boolean(before)&&before!==after);
       pushMagpie(structuredClone(readonlyFixture));await wait();
     }
+    {const wait=()=>new Promise(r=>setTimeout(r,80)),route=structuredClone(readonlyRows[0]),base=route.order[0];
+      const seat=(id,provider,name)=>({...structuredClone(base),id,provider,name,kind:'account',who:id+'@example.test',plan:'Plus'});
+      route.order=[seat('ca','codex','Alpha'),seat('ob','other','Beta'),seat('cz','codex','Zulu')];route.tries=[];route.done=true;
+      pushMagpie({...structuredClone(readonlyFixture),routes:[route]});await wait();
+      const boxes=[...root.querySelectorAll('.rt-acts .rt-pgrp')];
+      check('a-provider-whose-name-changed-stays-one-box-with-all-its-accounts',root.querySelectorAll('.rt-acts .rt-act').length===3&&boxes.length===2&&boxes.some(b=>b.querySelectorAll('.rt-act').length===2));
+      pushMagpie(structuredClone(readonlyFixture));await wait();
+    }
     {const wait=()=>new Promise(r=>setTimeout(r,80)),account=structuredClone(readonlyRows[0].order[0]);
       historyFixtures[''].tallies=[{key:'tally-account',candidate:account,at:Date.now(),tried:3,ok:2,failed:1,fails:{quota:1},models:[]}];
       pushMagpie({...structuredClone(readonlyFixture),routes:[]});root.querySelector('.rt-days .rt-day').click();await wait();

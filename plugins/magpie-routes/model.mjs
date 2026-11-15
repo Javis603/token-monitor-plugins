@@ -35,10 +35,11 @@ export function routeStatus(route) {
 export function candidateState(candidate, route, lifted = {}, now = Date.now()) {
   const attempts = route.tries.filter(item => seatKey(tried(route,item)) === seatKey(candidate));
   const last = attempts.at(-1);
-  const liveRest = value => value && Date.parse(value.until) > now && !(value.key && Date.parse(lifted[value.key]) >= Date.parse(route.time) && Date.parse(lifted[value.key])<=now);
+  // A rest was found when its try ended, or, for the account's own, when the request was weighed; a lift counts only after that.
+  const liveRest = (value, found = Date.parse(route.time)) => value && Date.parse(value.until) > now && !(value.key && Date.parse(lifted[value.key]) >= found && Date.parse(lifted[value.key])<=now);
   if (last) {
     if (!last.done) return { tone: 'working', label: l("回應中"), selected: true, attempts };
-    if(liveRest(last.rest))return {tone:'resting',label:reasonName(last.rest.why||last.rest.kind),until:last.rest.until,rest:last.rest,attempts};
+    if(liveRest(last.rest,(Date.parse(last.start)||Date.parse(route.time))+(last.ms||0)))return {tone:'resting',label:reasonName(last.rest.why||last.rest.kind),until:last.rest.until,rest:last.rest,attempts};
     if (last.fail === 'canceled') return { tone: 'done', label: l('Canceled'), selected: false, attempts };
     // The account's own rest, as the gateway weighed it, counts as well as the one this try reported (Magpie's findings/rests).
     if ((last.status >= 400 || last.fail) && liveRest(candidate.rest)) return {tone:'resting',label:reasonName(candidate.rest.why||candidate.rest.kind),until:candidate.rest.until,rest:candidate.rest,attempts};
