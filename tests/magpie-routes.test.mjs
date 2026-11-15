@@ -44,6 +44,10 @@ test('a seat whose account the gateway rests is resting even when its failed try
   const answered = { ...route, tries: [{ id: 'a', model: 'm', done: true, status: 200 }] };
   assert.equal(candidateState(candidate, answered).tone, 'done');
 });
+test('every locale defines the same wording keys as English', async () => {
+  const dictionaries = (await import('../plugins/magpie-routes/locales.mjs')).default, english = Object.keys(dictionaries.en).sort();
+  for (const [locale, dictionary] of Object.entries(dictionaries)) assert.deepEqual(Object.keys(dictionary).sort(), english, locale);
+});
 test('historical selection shows only its selected route; live mode excludes expired completed work', () => {
   const now = Date.now(), old = { id: 1, agent: 'codex', done: true, time: new Date(now - 60000).toISOString() };
   const live = { id: 2, agent: 'codex', done: false, time: new Date(now).toISOString() };
