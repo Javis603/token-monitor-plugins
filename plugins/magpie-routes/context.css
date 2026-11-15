@@ -1,4 +1,4 @@
-.rr-context { --fg:var(--rr-ink); --fg-2:var(--rr-secondary); --muted:var(--rr-muted); --faint:var(--rr-muted); --line:var(--rr-rule); --card:transparent; --pill:var(--rr-fill); --green:var(--success,#b7ead4); --green-soft:color-mix(in srgb,var(--green) 10%,transparent); --amber:light-dark(#b45309,#f2b544); --amber-soft:color-mix(in srgb,var(--amber) 10%,transparent); --red:var(--rr-red); --red-soft:color-mix(in srgb,var(--red) 10%,transparent); --code:ui-monospace,monospace; --ease:cubic-bezier(.32,.72,0,1); --k-system:light-dark(#7c3aed,#c4b5fd); --k-tools:light-dark(#0369a1,#7dd3fc); --k-skills:light-dark(#475569,#a5b4c8); --k-memory:light-dark(#a16207,#fde047); --k-files:light-dark(#047857,#6ee7b7); --k-results:light-dark(#c2410c,#fdba74); --k-chat:light-dark(#4338ca,#a5b4fc); --k-free:color-mix(in srgb,var(--fg) 7%,transparent); }
+.rr-context { --fg:var(--rr-ink); --fg-2:var(--rr-secondary); --muted:var(--rr-muted); --faint:var(--rr-muted); --line:var(--rr-rule); --card:var(--rr-card); --pill:var(--rr-fill); --green:var(--success,#b7ead4); --green-soft:color-mix(in srgb,var(--green) 10%,transparent); --amber:light-dark(#b45309,#f2b544); --amber-soft:color-mix(in srgb,var(--amber) 10%,transparent); --red:var(--rr-red); --red-soft:color-mix(in srgb,var(--red) 10%,transparent); --code:ui-monospace,monospace; --ease:cubic-bezier(.32,.72,0,1); --k-system:light-dark(#7c3aed,#c4b5fd); --k-tools:light-dark(#0369a1,#7dd3fc); --k-skills:light-dark(#475569,#a5b4c8); --k-memory:light-dark(#a16207,#fde047); --k-files:light-dark(#047857,#6ee7b7); --k-results:light-dark(#c2410c,#fdba74); --k-chat:light-dark(#4338ca,#a5b4fc); --k-free:color-mix(in srgb,var(--fg) 7%,transparent); }
 .rr-context .segs { display:flex; align-items:center; gap:2px; padding:2px; border-radius:7px; background:var(--rr-fill); }
 .rr-context .segs .opt { border:0; border-radius:5px; background:transparent; color:var(--rr-muted); }
 .rr-context .segs .opt[aria-pressed="true"] { background:var(--rr-strong); color:var(--rr-ink); }
@@ -178,15 +178,11 @@
 .rr-context .ctx-look-b:hover { color: var(--fg-2); }
 .rr-context .ctx-look-b.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 0 0 .5px color-mix(in srgb, var(--fg) 10%, transparent); }
 
-.rr-context .ctx-card { border:0; border-top:1px solid var(--rr-rule); border-radius:0; padding:18px 0 0; margin:20px 0 24px; background:transparent; }
 .rr-context .ctx-k, .rr-context .ctx-sub { letter-spacing:0; text-transform:none; }
 .rr-context .ctx-tip { background:var(--glass-strong,rgba(28,30,35,.95)); backdrop-filter:var(--glass-filter); color:var(--rr-ink); max-width:min(280px,calc(100% - 16px)); min-width:min(190px,calc(100% - 16px)); }
 .rr-context .ctx-tip-row,.rr-context .ctx-tip-head span:last-child,.rr-context .ctx-tip-sub,.rr-context .ctx-tip-more { color:var(--rr-muted); }
 .rr-context .ctx-tip-row.on { color:var(--rr-ink); }
-.rr-context .ctx-tile { background:color-mix(in srgb,var(--k) 11%,transparent); }
-.rr-context .ctx-tile:not(.free):hover,.rr-context .ctx-tile.on { background:color-mix(in srgb,var(--k) 19%,transparent); }
 .rr-context .ctx-tile .v { color:color-mix(in srgb,var(--k) 55%,var(--rr-ink)); }
-.rr-context .ctx-spark .at { background:var(--text); }
 .rr-context.still *, .rr-context.still *::before { animation:none !important; transition:none !important; }
 .rr-context .ctx-click { cursor:pointer; }
 .rr-context .ctx-click:focus-visible,.rr-context .ctx-spark .hit:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }

@@ -13,7 +13,7 @@ function createHistory(directory,signal,clock=()=>new Date()) {
     const old=cache.get(file);
     if(old?.size===stat.size&&old.mtime===stat.mtimeMs&&(!keep||old.rows)&&(!tally||old.tallies))return old;
     const compressed=file.endsWith('.gz'), incremental=!compressed&&old&&!old.tail&&stat.size>old.size&&(!keep||old.rows)&&(!tally||old.tallies);
-    const offset=incremental?old.offset:0,tallies=tally&&incremental?new Map([...old.tallies].map(([key,a])=>[key,{...a,models:[...a.models]}])):new Map();
+    const offset=incremental?old.offset:0,tallies=tally&&incremental?new Map([...old.tallies].map(([key,a])=>[key,{...a,fails:{...a.fails},models:[...a.models]}])):new Map();
     let count=incremental?old.count:0,rows=keep&&incremental?[...old.rows]:[],pending='',consumed=offset;
     const input=fs.createReadStream(file,{start:offset,signal}),stream=compressed?input.pipe(zlib.createGunzip()):input;
     // Forward source errors through the decompressor as async iteration only
@@ -33,9 +33,9 @@ function createHistory(directory,signal,clock=()=>new Date()) {
         }catch{return;}
         if(keep){rows.push(row);if(rows.length>2200){rows.sort(byTime);rows.splice(0,rows.length-2000);}}
         if(tally){
-          const key=w=>w.kind==='account'&&w.who?JSON.stringify([w.provider,w.who.trim().toLowerCase()]):w.id;
-          for(const w of row.order){const k=key(w);if(!tallies.has(k))tallies.set(k,{key:k,candidate:w,at:Date.parse(row.time)||0,tried:0,ok:0,failed:0,models:[]});const a=tallies.get(k);if((Date.parse(row.time)||0)>=a.at){a.candidate=w;a.at=Date.parse(row.time)||0;}}
-          for(const tr of row.tries){if(!tr.done||tr.fail==='canceled')continue;const w=row.order.find(w=>w.id===tr.id&&w.model===tr.model)||row.order.find(w=>w.id===tr.id);if(!w)continue;const a=tallies.get(key(w));a.tried++;if(tr.status<400&&!tr.fail){a.ok++;if(!a.models.includes(tr.model||w.model))a.models.push(tr.model||w.model);}else a.failed++;}
+          const key=w=>w.kind==='account'&&w.who?JSON.stringify(w.plan&&String(w.plan).trim()?[w.provider,w.who.trim().toLowerCase(),String(w.plan).trim().toLowerCase()]:[w.provider,w.who.trim().toLowerCase()]):w.id;
+          for(const w of row.order){const k=key(w);if(!tallies.has(k))tallies.set(k,{key:k,candidate:w,at:Date.parse(row.time)||0,tried:0,ok:0,failed:0,fails:{},last:0,authAt:0,models:[]});const a=tallies.get(k);if((Date.parse(row.time)||0)>=a.at){a.candidate=w;a.at=Date.parse(row.time)||0;}}
+          for(const tr of row.tries){if(!tr.done||tr.fail==='canceled')continue;const w=row.order.find(w=>w.id===tr.id&&w.model===tr.model)||row.order.find(w=>w.id===tr.id);if(!w)continue;const a=tallies.get(key(w));a.tried++;const end=(Date.parse(tr.start)||0)+(tr.ms||0);if(tr.status<400&&!tr.fail){a.ok++;a.last=Math.max(a.last,end);if(!a.models.includes(tr.model||w.model))a.models.push(tr.model||w.model);}else{a.failed++;if(tr.fail==='auth')a.authAt=Math.max(a.authAt,end);const why=tr.fail==='quota'&&tr.rest?.rate?'rate':tr.fail||'other';a.fails[why]=(a.fails[why]||0)+1;}}
         }
       }
     }
@@ -73,7 +73,7 @@ function createHistory(directory,signal,clock=()=>new Date()) {
         if(!signal?.aborted&&['Z_DATA_ERROR','Z_BUF_ERROR'].includes(error.code)){cache.delete(file);unavailableDays.add(date);if(!days.has(date))days.set(date,null);continue;}
         throw error;
       }
-      if(date===today)for(const[k,a]of got.tallies){if(!tallies.has(k))tallies.set(k,{...a,models:[...a.models]});else{const prev=tallies.get(k);prev.tried+=a.tried;prev.ok+=a.ok;prev.failed+=a.failed;if(a.at>=prev.at){prev.candidate=a.candidate;prev.at=a.at;}prev.models=[...new Set([...prev.models,...a.models])];}}
+      if(date===today)for(const[k,a]of got.tallies){if(!tallies.has(k))tallies.set(k,{...a,fails:{...a.fails},models:[...a.models]});else{const prev=tallies.get(k);prev.tried+=a.tried;prev.ok+=a.ok;prev.failed+=a.failed;prev.last=Math.max(prev.last||0,a.last||0);prev.authAt=Math.max(prev.authAt||0,a.authAt||0);for(const[why,n]of Object.entries(a.fails||{}))prev.fails[why]=(prev.fails[why]||0)+n;if(a.at>=prev.at){prev.candidate=a.candidate;prev.at=a.at;}prev.models=[...new Set([...prev.models,...a.models])];}}
       days.set(date,(days.get(date)||0)+got.count);
       if(date===day){routes.push(...got.rows);total+=got.count;}
     }
