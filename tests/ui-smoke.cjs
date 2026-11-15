@@ -262,6 +262,9 @@ app.whenReady().then(async () => {
       const lifted=withRest({until:hour(),why:'quota',key:'k-account'},{lifted:{'k-account':new Date().toISOString()}});
       pushMagpie(lifted);await wait();
       check('hand-lifted-rest-no-longer-rests-the-account',restCount()===base);
+      {const restFixture=withRest({until:hour(),why:'quota',key:'k-account'});pushMagpie(restFixture);await wait();
+        const resting=restCount()===base+1;pushMagpie({...restFixture,lifted:{'k-account':new Date().toISOString()}});await wait();
+        check('lifting-a-rest-repaints-at-once-with-the-same-routes',resting&&restCount()===base);}
       const fixedUntil=hour();pushMagpie(withRest({until:fixedUntil,why:'quota',key:'k-account'}));await wait();
       const text=()=>root.querySelector('.rt-act.rest .st.rest')?.textContent||'',before=text(),realNow=Date.now;
       Date.now=()=>realNow()+1800e3;pushMagpie(withRest({until:fixedUntil,why:'quota',key:'k-account'}));await wait();
@@ -273,6 +276,9 @@ app.whenReady().then(async () => {
       historyFixtures[''].tallies=[{key:'tally-account',candidate:account,at:Date.now(),tried:3,ok:2,failed:1,fails:{quota:1},models:[]}];
       pushMagpie({...structuredClone(readonlyFixture),routes:[]});root.querySelector('.rt-days .rt-day').click();await wait();
       check('todays-accounts-stay-without-live-requests',root.querySelector('.rt-reqs.none')&&!root.querySelector('.rt-cols').classList.contains('solo')&&root.querySelectorAll('.rt-acts .rt-act').length>0);
+      historyFixtures[''].tallies=[{key:'tally-account',candidate:account,at:Date.now(),tried:3,ok:1,failed:2,fails:{auth:2},last:Date.now()-60000,authAt:Date.now()-1000,models:[]}];
+      pushMagpie({...structuredClone(readonlyFixture),routes:[]});root.querySelector('.rt-days .rt-day').click();await wait();
+      check('todays-tally-shows-sign-in-needed-without-live-requests',root.querySelector('.rt-acts .rt-signin')!==null);
       historyFixtures[''].tallies=[];pushMagpie(structuredClone(readonlyFixture));root.querySelector('.rt-days .rt-day').click();await wait();
     }
     check('accounts-retain-mask-for-live-readings',[...root.querySelectorAll('.rt-act .nm .rr-pii')].every(n=>getComputedStyle(n).filter.includes('blur')));

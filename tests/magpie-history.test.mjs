@@ -86,10 +86,12 @@ test('daily tallies keep an account on each plan apart and count failures by rea
   const history=createHistory(dir,undefined,()=>new Date('2026-11-10T12:00:00'));
   const account=plan=>({id:'a-'+plan,provider:'codex',kind:'account',who:'account@example.test',plan,model:'m'});
   const row=(id,plan,tries)=>raw(id,{order:[account(plan)],tries:tries.map(t=>({id:'a-'+plan,model:'m',done:true,...t}))});
-  fs.writeFileSync(path.join(dir,'2026-11-10.jsonl'),[row(1,'plus',[{status:200}]),row(2,'pro',[{status:429,fail:'quota'},{status:429,fail:'quota'},{status:500}])].map(r=>JSON.stringify(r)).join('\n')+'\n');
+  fs.writeFileSync(path.join(dir,'2026-11-10.jsonl'),[row(1,'plus',[{status:200,start:'2026-11-10T01:00:00.000Z',ms:2000}]),row(2,'pro',[{status:429,fail:'quota'},{status:401,fail:'auth',start:'2026-11-10T02:00:00.000Z',ms:500},{status:500}])].map(r=>JSON.stringify(r)).join('\n')+'\n');
   const tallies=(await history()).tallies,byPlan=Object.fromEntries(tallies.map(x=>[x.candidate.plan,x]));
   assert.equal(tallies.length,2);assert.equal(byPlan.plus.tried,1);assert.equal(byPlan.pro.tried,3);
-  assert.deepEqual(byPlan.pro.fails,{quota:2,other:1});assert.deepEqual(byPlan.plus.fails,{});
+  assert.deepEqual(byPlan.pro.fails,{quota:1,auth:1,other:1});assert.deepEqual(byPlan.plus.fails,{});
+  assert.equal(byPlan.plus.last,Date.parse('2026-11-10T01:00:02.000Z'));assert.equal(byPlan.plus.authAt,0);
+  assert.equal(byPlan.pro.authAt,Date.parse('2026-11-10T02:00:00.500Z'));assert.equal(byPlan.pro.last,0);
 });
 test('folded quota uses distinct accounts on one plan and leaves mismatched readings separate',async()=>{
   const {foldQuota}=await import('../plugins/magpie-routes/requests.mjs');

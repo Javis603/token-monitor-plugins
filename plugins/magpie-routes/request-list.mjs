@@ -298,7 +298,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
   const modelRest=(a,m,rest,when)=>{if((a.mrests.get(m)?.at||0)<=when)a.mrests.set(m,{rest,at:when});};
   function foldActs(rows){
     const by=new Map(),seed=!value.historyDay&&!value.purpose.length&&value.tallies?.length?value.tallies:null;
-    if(seed)for(const x of seed)by.set(accountKey(x.candidate),{w:x.candidate,tried:x.tried,ok:x.ok,fails:x.fails?{...x.fails}:x.failed?{other:x.failed}:{},last:x.last||0,authAt:0,rest:null,restAt:0,seen:0,pos:0,at:x.at,models:new Set(x.models||[]),mrests:new Map()});
+    if(seed)for(const x of seed)by.set(accountKey(x.candidate),{w:x.candidate,tried:x.tried,ok:x.ok,fails:x.fails?{...x.fails}:x.failed?{other:x.failed}:{},last:x.last||0,authAt:x.authAt||0,rest:null,restAt:0,seen:0,pos:0,at:x.at,models:new Set(x.models||[]),mrests:new Map()});
     const seeded=x=>{const rest=x.candidate.rest;if(!rest)return;const a=by.get(accountKey(x.candidate)),rm=restModel(rest,x.candidate.model);if(rm)modelRest(a,rm,rest,x.at||0);else{a.rest=rest;a.restAt=x.at||0;}};
     if(seed)for(const x of seed)seeded(x);
     for(const r of [...rows].reverse()){
@@ -472,7 +472,7 @@ export function createRequests(ctx,actions,sessionNumbers,hueOf=()=>'currentColo
     costAvailable=value.filtered.some(r=>(r.priced&&Number.isFinite(r.cost))||r.usage?.some(u=>u.credits!=null));
     const scope=JSON.stringify([groupBy,value.historyDay,value.filter,value.purpose,[...visibleMetrics]]);
     if(scope!==scopeKey){scopeKey=scope;shownRows=CHUNK;}
-    const key=JSON.stringify([shownRows,groupBy,[...visibleMetrics],[...closedGroups],[...keysOpen],[...keysShut],actsAll,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,sorted.some(r=>!r.done)?Math.floor(Date.now()/1000):0,Math.floor((value.clock??Date.now())/30000),locale()]);
+    const key=JSON.stringify([shownRows,groupBy,[...visibleMetrics],[...closedGroups],[...keysOpen],[...keysShut],actsAll,value.route?.id,value.route?.time,value.masked,value.historyDay,value.historyDays,value.historyLoading,value.historyCut,value.cardsLoading,value.cardsError,value.filter,value.purpose,sorted.some(r=>!r.done)?Math.floor(Date.now()/1000):0,Math.floor((value.clock??Date.now())/30000),JSON.stringify(value.data?.lifted||{}),locale()]);
     if(!force&&key===lastKey&&lastCards===value.cards&&lastTallies===value.tallies&&lastRows.length===sorted.length&&lastRows.every((r,i)=>r===sorted[i]))return;
     lastKey=key;lastCards=value.cards;lastTallies=value.tallies;lastRows=sorted;
     const allPurposes=[...new Set([...value.allRoutes.map(requestPurpose),...value.purpose])];
