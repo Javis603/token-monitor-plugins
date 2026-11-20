@@ -184,6 +184,7 @@ test('antigravity-account-ledger ships changelog summaries across all 6 locales 
   assert.equal(Object.keys(packageChangelog(files, manifest.version)).length, 6);
   assert.deepEqual(manifest.views[0].surfaces, ['home']);
   assert.deepEqual(manifest.views[0].defaultSurfaces, ['home']);
+  assert.equal(manifest.background, true);
   const uiSource = fs.readFileSync(new URL('ui.mjs', root), 'utf8');
   const cssSource = fs.readFileSync(new URL('styles.css', root), 'utf8');
   assert.equal(uiSource.includes('headerActions'), false);
@@ -598,6 +599,79 @@ test('antigravity-account-ledger UI renders honest unpriced indicators, 4-column
     assert.equal(mysteryRow.children[2].textContent, '25.0%');
     assert.equal(mysteryRow.children[3].textContent, '—');
 
+    mounted.dispose();
+  } finally {
+    dom.restore();
+  }
+});
+
+test('antigravity-account-ledger preserves same-account continuity across short window pauses and warns when background mode is off', async () => {
+  const ledger = backend.createDefaultLedger('2026-11-20T02:00:00Z');
+  const day = '2026-11-20';
+  backend.syncTodaySnapshot(day, {
+    totalTokens: 1_000_000,
+    costUsd: 1.0,
+    models: { 'gemini-4-neon': { tokens: 1_000_000, costUsd: 1.0, unpricedTokens: 0 } }
+  }, { email: 'alice@example.com' }, ledger, { now: '2026-11-20T03:00:00Z', save: false });
+
+  // 66-minute window pause, still Alice, no other account activity -> attributed to Alice
+  backend.syncTodaySnapshot(day, {
+    totalTokens: 3_000_000,
+    costUsd: 3.0,
+    models: { 'gemini-4-neon': { tokens: 3_000_000, costUsd: 3.0, unpricedTokens: 0 } }
+  }, { email: 'alice@example.com' }, ledger, {
+    now: '2026-11-20T04:06:00Z',
+    save: false,
+    previousActiveAccount: 'alice@example.com',
+    discoveredAccounts: [
+      { email: 'alice@example.com', lastUsed: Math.floor(Date.parse('2026-11-20T04:05:00Z') / 1000) },
+      { email: 'bob@example.com', lastUsed: Math.floor(Date.parse('2026-11-19T12:00:00Z') / 1000) }
+    ]
+  });
+  assert.equal(ledger.daily[day].allocations['alice@example.com'].totalTokens, 2_000_000);
+
+  // Another 40-minute pause, but Bob WAS active during the gap -> must go to unattributed
+  backend.syncTodaySnapshot(day, {
+    totalTokens: 4_500_000,
+    costUsd: 4.5,
+    models: { 'gemini-4-neon': { tokens: 4_500_000, costUsd: 4.5, unpricedTokens: 0 } }
+  }, { email: 'alice@example.com' }, ledger, {
+    now: '2026-11-20T04:46:00Z',
+    save: false,
+    previousActiveAccount: 'alice@example.com',
+    discoveredAccounts: [
+      { email: 'alice@example.com', lastUsed: Math.floor(Date.parse('2026-11-20T04:45:00Z') / 1000) },
+      { email: 'bob@example.com', lastUsed: Math.floor(Date.parse('2026-11-20T04:20:00Z') / 1000) }
+    ]
+  });
+  assert.equal(ledger.daily[day].allocations['alice@example.com'].totalTokens, 2_000_000);
+  assert.equal(ledger.daily[day].allocations.unattributed.totalTokens, 2_500_000);
+
+  // UI shows reminder when host reports backgroundEnabled === false
+  const { activate } = await import('../plugins/antigravity-account-ledger/ui.mjs');
+  const dom = installFakeDom();
+  try {
+    const container = new FakeElement('div');
+    const ui = activate({
+      backend: {
+        async call() {
+          return {
+            summary: { totalTokens: 0, costUsd: 0, unpricedTokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, models: {}, accounts: [] },
+            discoveredAccounts: [],
+            activeAccount: null,
+            backgroundEnabled: false,
+            accountFilter: 'all',
+            range: { start: '2026-11-01', end: '2026-11-20' }
+          };
+        },
+        subscribe() { return () => {}; }
+      }
+    });
+    const mounted = ui.mount(container, {});
+    await tick(20);
+    const banner = container.querySelector('.ag-ledger-status-banner');
+    assert.equal(banner.classList.contains('hidden'), false);
+    assert.match(banner.textContent, /后台运行/);
     mounted.dispose();
   } finally {
     dom.restore();
