@@ -10,7 +10,7 @@ let syntaxFiles = 0;
 for (const id of ids) {
   const m = manifest(id), dir = path.join(root, 'plugins', id);
   if (m.id !== id || m.tmApi !== 1 || new Set(m.files).size !== m.files.length) throw Error(`${id}: invalid manifest identity/files`);
-  if (m.author !== 'Javis603' || /Local test|Local integration/.test(JSON.stringify(m))) throw Error(`${id}: unfinished public metadata`);
+  if (typeof m.author !== 'string' || !m.author.trim() || /Local test|Local integration/.test(JSON.stringify(m))) throw Error(`${id}: unfinished public metadata`);
   for (const name of m.files) {
     if (path.isAbsolute(name) || name.split('/').includes('..')) throw Error(`${id}: invalid file path`);
     const file = path.join(dir, name);

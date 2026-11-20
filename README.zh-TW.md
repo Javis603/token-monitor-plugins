@@ -15,6 +15,7 @@
 | 外掛 | 說明 | 版本 |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.zh-TW.md) | 查看本機即時路由與上下文。 | `0.1.0` |
+| [Antigravity 多帳號用量帳本](plugins/antigravity-account-ledger/README.zh-TW.md) | 按 Google 帳號與自訂日期區間統計 Antigravity 全模型 Token 用量與費用。 | `0.1.0` |
 
 ## 安裝
 

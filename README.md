@@ -15,6 +15,7 @@ Community-maintained plugins for [Token Monitor](https://github.com/Javis603/tok
 | Plugin | Description | Version |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.md) | Live local routing and context views. | `0.1.0` |
+| [Antigravity Account Ledger](plugins/antigravity-account-ledger/README.md) | Per-Google-account token usage, USD cost breakdown and custom date ranges for Antigravity. | `0.1.0` |
 
 ## Installation
 
