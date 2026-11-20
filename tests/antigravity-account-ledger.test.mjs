@@ -677,3 +677,76 @@ test('antigravity-account-ledger preserves same-account continuity across short 
     dom.restore();
   }
 });
+
+test('antigravity-account-ledger background sync survives frequent host update() calls, reads initial background state, and scans official CLI logs', async (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-bg-starve-'));
+  t.after(() => removeTestDir(tmpDir));
+
+  // Initial host settings with background: false -> exposed immediately on first getSummary()
+  fs.writeFileSync(path.join(tmpDir, 'settings.json'), JSON.stringify({
+    pluginStates: { 'antigravity-account-ledger': { enabled: true, background: false } }
+  }), 'utf8');
+
+  // Official Antigravity CLI auth log
+  const cliLogDir = path.join(tmpDir, '.gemini', 'antigravity-cli', 'log');
+  fs.mkdirSync(cliLogDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(cliLogDir, 'cli-20261120_100000.log'),
+    'I1120 10:01:02.123456 9999 server_oauth.go:42] applyAuthResult: email=cli-user@example.com, ok=true\n',
+    'utf8'
+  );
+
+  let tokens = 1000;
+  const host = {
+    async call(method, args = {}) {
+      if (method === 'app.settings') return {};
+      if (method !== 'data.query') return null;
+      if (args.resource === 'limits') {
+        return {
+          availability: 'available',
+          rows: [{ provider: 'antigravity', source: 'rpc', status: 'ok', accountEmail: 'live@example.com', updatedAt: new Date().toISOString() }],
+          pageInfo: { hasMore: false, nextCursor: null }
+        };
+      }
+      if (args.resource === 'tools') {
+        return {
+          availability: 'available',
+          rows: [{
+            client: 'antigravity',
+            totalTokens: tokens,
+            cost: { knownUsd: tokens / 1000, unpricedTokens: 0 },
+            models: [{ model: 'gemini-4-neon', totalTokens: tokens, knownUsd: tokens / 1000 }]
+          }],
+          pageInfo: { hasMore: false, nextCursor: null }
+        };
+      }
+      return { availability: 'available', rows: [], pageInfo: { hasMore: false, nextCursor: null } };
+    }
+  };
+
+  const instance = await backend.activate({
+    dataDirectory: tmpDir,
+    hostDataDir: tmpDir,
+    homeDir: tmpDir,
+    host,
+    autoRefreshIntervalMs: 40,
+    backgroundHeartbeatIntervalMs: 50
+  });
+  t.after(() => instance.dispose());
+
+  const first = await instance.call('getSummary', {});
+  assert.equal(first.backgroundEnabled, false);
+  assert.ok(first.discoveredAccounts.some((a) => a.email === 'cli-user@example.com' && a.sources.includes('cli_log')));
+
+  // Switch hidden + background: true, then spam update() every 10ms (5x faster than 50ms timer)
+  instance.update({ visible: false, background: true });
+  tokens = 4500;
+  for (let i = 0; i < 12; i += 1) {
+    await tick(10);
+    instance.update({ visible: false, background: true });
+  }
+
+  const persisted = JSON.parse(fs.readFileSync(path.join(tmpDir, backend.DEFAULT_LEDGER_FILENAME), 'utf8'));
+  const today = backend.localDayKey();
+  assert.equal(persisted.daily[today].allocations['live@example.com']?.totalTokens, 3500);
+});
