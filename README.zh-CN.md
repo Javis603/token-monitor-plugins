@@ -15,6 +15,7 @@
 | 插件 | 说明 | 状态 |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.zh-CN.md) | 查看本机实时路由与上下文。 | `0.1.0` |
+| [CodingPass](plugins/codingpass/README.zh-CN.md) | 在额度视图显示 CodingPass 5 小时、每周、每月额度。 | `0.1.0` |
 
 ## 安装
 

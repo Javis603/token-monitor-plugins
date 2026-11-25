@@ -15,6 +15,7 @@
 | 플러그인 | 설명 | 버전 |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.ko.md) | 로컬 실시간 라우팅과 컨텍스트 보기. | `0.1.0` |
+| [CodingPass](plugins/codingpass/README.ko.md) | 한도 보기에서 CodingPass 5시간·주간·월간 한도 표시. | `0.1.0` |
 
 ## 설치
 

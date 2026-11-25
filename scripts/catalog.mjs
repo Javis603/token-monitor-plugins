@@ -5,8 +5,8 @@ import { createRequire } from 'node:module';
 import { root, ids, manifest, option } from './common.mjs';
 import { CHANGELOG_FILES } from './changelog.mjs';
 import { packageChangelog } from './changelog.mjs';
-const base = option('--base-url'), repository = option('--repository'), host = option('--host'), appRange = option('--app-range');
-if (!base || !repository || !host || !appRange) throw Error('Supply --host <Token Monitor checkout>, tested --app-range <SemVer range>, real --base-url <direct HTTPS package directory> and --repository <GitHub repository URL>. No endpoint is configured by default.');
+const base = option('--base-url'), repository = option('--repository'), host = option('--host');
+if (!base || !repository || !host) throw Error('Supply --host <Token Monitor checkout>, real --base-url <direct HTTPS package directory> and --repository <GitHub repository URL>. No endpoint is configured by default.');
 const url = new URL(base);
 if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw Error('Package base must be a direct HTTPS directory URL without credentials, query or fragment.');
 if (!/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/?$/.test(repository)) throw Error('repository must identify the actual GitHub project.');
@@ -24,11 +24,15 @@ const plugins = ids.map(id => {
   if (sha256 !== entry.sha256) throw Error(`${id}: package changed after build`);
   const pkg = parsePackage(bytes, { checkCompatibility: false });
   if (pkg.manifest.id !== id || pkg.manifest.version !== m.version) throw Error(`${id}: package identity/version does not match`);
-  if (m.engines?.tokenMonitor !== appRange) throw Error(`${id}: catalog range must match the packaged manifest`);
+  // Each plugin keeps its own tested App range; the catalog copies it from the packaged manifest.
+  const appRange = m.engines?.tokenMonitor;
+  if (typeof appRange !== 'string' || !appRange.trim()) throw Error(`${id}: manifest must declare engines.tokenMonitor`);
+  if (JSON.parse(bytes).manifest?.engines?.tokenMonitor !== appRange) throw Error(`${id}: catalog range must match the packaged manifest`);
+  const types = m.limits?.length ? ['limits'] : ['widget', 'page'];
   const readmePaths = Object.fromEntries(Object.entries(CHANGELOG_FILES).map(([locale, file]) => [locale, `plugins/${id}/${file.replace('CHANGELOG', 'README')}`]));
   const changelog = packageChangelog(pkg.files, m.version);
   return { id, name: m.name, description: m.description, author: m.author, identityIcon: m.identityIcon, repository, readmePaths,
-    versions: [{ version: m.version, changelog, engines: { tokenMonitor: appRange }, url: new URL(entry.filename, url).href, sha256, types: ['widget','page'] }] };
+    versions: [{ version: m.version, changelog, engines: { tokenMonitor: appRange }, url: new URL(entry.filename, url).href, sha256, types }] };
 });
 const index = { format: 1, title: { en: 'Token Monitor Community', 'zh-TW': 'Token Monitor 社群' }, plugins };
 const { parseIndex } = require(path.resolve(host, 'src/electron/plugins/catalogSources.js'));

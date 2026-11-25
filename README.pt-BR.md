@@ -15,6 +15,7 @@ Plugins mantidos pela comunidade para o [Token Monitor](https://github.com/Javis
 | Plugin | Descrição | Versão |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.pt-BR.md) | Visualizações locais de roteamento e contexto em tempo real. | `0.1.0` |
+| [CodingPass](plugins/codingpass/README.pt-BR.md) | Franquias de 5 horas, semanal e mensal do CodingPass nas visualizações de limites. | `0.1.0` |
 
 ## Instalação
 

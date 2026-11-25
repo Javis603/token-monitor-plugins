@@ -15,6 +15,7 @@
 | 外掛 | 說明 | 版本 |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.zh-TW.md) | 查看本機即時路由與上下文。 | `0.1.0` |
+| [CodingPass](plugins/codingpass/README.zh-TW.md) | 在額度視圖顯示 CodingPass 5 小時、每週、每月額度。 | `0.1.0` |
 
 ## 安裝
 

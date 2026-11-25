@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Javis603/token-monitor
-          ref: 1423800730ae4dc083a046edd19efa36ff907e64
+          ref: 9d745c106ac5030045dade55c0d1aea279cdcfd7
           path: host
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
           npm test
           npm run check -- --host ../host
           npm run build -- --host ../host
-          npm run catalog -- --host ../host --app-range '>=0.81.0' --base-url "https://raw.githubusercontent.com/${PLUGIN_REPOSITORY}/dist/" --repository "https://github.com/${PLUGIN_REPOSITORY}"
+          npm run catalog -- --host ../host --base-url "https://raw.githubusercontent.com/${PLUGIN_REPOSITORY}/dist/" --repository "https://github.com/${PLUGIN_REPOSITORY}"
       - uses: actions/upload-artifact@v4
         with:
           name: plugin-distribution
