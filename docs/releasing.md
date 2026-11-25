@@ -19,7 +19,7 @@ Catalog URL：`https://raw.githubusercontent.com/Javis603/token-monitor-plugins/
 
 ## 更新插件
 
-修改插件後更新其 manifest 版本及六語 CHANGELOG，同步 README。使用 `context.headerActions` 的 Magpie Routes 最低宿主為 **0.81.0**；manifest 與 catalog 的相容範圍須一致。更改最低版本時同步 workflow 的 `--app-range`。固定宿主 commit 的更新應另行驗證，不自動追蹤浮動版本。
+修改插件後更新其 manifest 版本及六語 CHANGELOG，同步 README。每個插件以 manifest 的 `engines.tokenMonitor` 宣告自己測試過的宿主範圍，catalog 工具直接沿用，不再由 workflow 統一指定：使用 `context.headerActions` 的 Magpie Routes 為 **>=0.81.0**，使用額度（limits）模組的 CodingPass 為 **>=0.88.0**。workflow 固定的宿主 commit 須支援所有插件用到的 manifest 欄位。固定宿主 commit 的更新應另行驗證，不自動追蹤浮動版本。
 
 來源檢查與打包不能取代實際 App 安裝和 gateway 驗收。發布前確認支援的正式宿主版本可用，並在獨立 profile 驗證，不動既有本機插件或設定。
 
@@ -36,7 +36,7 @@ npm run build -- --host /path/to/token-monitor --local-only
 
 ```sh
 npm run build -- --host /path/to/token-monitor
-npm run catalog -- --host /path/to/token-monitor --app-range '>=0.81.0' \
+npm run catalog -- --host /path/to/token-monitor \
   --base-url https://raw.githubusercontent.com/Javis603/token-monitor-plugins/dist/ \
   --repository https://github.com/Javis603/token-monitor-plugins
 ```

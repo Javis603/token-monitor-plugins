@@ -15,6 +15,7 @@ Community-maintained plugins for [Token Monitor](https://github.com/Javis603/tok
 | Plugin | Description | Version |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.md) | Live local routing and context views. | `0.1.0` |
+| [CodingPass](plugins/codingpass/README.md) | CodingPass 5-hour, weekly and monthly allowance in the Limits views. | `0.1.0` |
 
 ## Installation
 

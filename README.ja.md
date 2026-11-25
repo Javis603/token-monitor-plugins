@@ -15,6 +15,7 @@
 | プラグイン | 説明 | バージョン |
 | --- | --- | --- |
 | [Magpie Routes](plugins/magpie-routes/README.ja.md) | ローカルのリアルタイムルーティングとコンテキストを表示。 | `0.1.0` |
+| [CodingPass](plugins/codingpass/README.ja.md) | 制限ビューに CodingPass の 5 時間・週間・月間の利用枠を表示。 | `0.1.0` |
 
 ## インストール
 

@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | `.github/assets/app.png` | Token Monitor app identity from its main repository | Root README header. |
 | `plugins/magpie-routes/assets/magpie-identity.png` | Magpie identity from the source below | Shared by the plugin and its README header; no duplicate in a root artwork folder. |
+| `plugins/codingpass/manifest.json` `identityIcon` and `presentation.icon` | Simple card-and-arrow mark drawn for this plugin after the codingpass.ai favicon | 128 px PNG identity tile in the CodingPass orange; the presentation icon is the same mark as a monochrome SVG mask. Identifies the service; no endorsement implied. |
 | Magpie bird and adapted vendor marks | [yetone/magpie](https://github.com/yetone/magpie/tree/f2b4b98948d0aeb7f1baa3929aeb6ead0d679437), MIT | Original notices retained; SVG/PNG bytes preserved. |
 
 Detailed per-module and asset attribution is in [SOURCE-NOTICE.md](../plugins/magpie-routes/SOURCE-NOTICE.md); the upstream license is in [MAGPIE-LICENSE.txt](../plugins/magpie-routes/MAGPIE-LICENSE.txt). Keep both in every package. Vendor marks are identifiers, not endorsements or newly authored artwork.

@@ -1,0 +1,88 @@
+{
+  "tmApi": 1,
+  "id": "codingpass",
+  "name": {
+    "en": "CodingPass",
+    "zh-CN": "CodingPass",
+    "zh-TW": "CodingPass"
+  },
+  "description": {
+    "en": "Show CodingPass 5-hour, weekly and monthly allowance usage, read from the codingpass.ai console with a manually supplied session cookie.",
+    "zh-CN": "使用手动提供的 codingpass.ai 控制台登录 Cookie，显示 CodingPass 的 5 小时、每周、每月额度用量。",
+    "zh-TW": "使用手動提供的 codingpass.ai 控制台登入 Cookie，顯示 CodingPass 的 5 小時、每週、每月額度用量。"
+  },
+  "version": "0.1.0",
+  "author": "ZC-TigerRoot",
+  "homepage": "https://github.com/Javis603/token-monitor-plugins/tree/main/plugins/codingpass",
+  "ui": "settings.mjs",
+  "backend": "backend.cjs",
+  "files": [
+    "backend.cjs",
+    "usage.cjs",
+    "settings.mjs",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CHANGELOG.zh-CN.md",
+    "CHANGELOG.zh-TW.md",
+    "CHANGELOG.ko.md",
+    "CHANGELOG.ja.md",
+    "CHANGELOG.pt-BR.md",
+    "README.md",
+    "README.zh-CN.md",
+    "README.zh-TW.md",
+    "README.ko.md",
+    "README.ja.md",
+    "README.pt-BR.md"
+  ],
+  "views": [
+    {
+      "id": "setup",
+      "title": {
+        "en": "CodingPass setup",
+        "zh-CN": "CodingPass 设置",
+        "zh-TW": "CodingPass 設定"
+      },
+      "surfaces": [
+        "settings"
+      ]
+    }
+  ],
+  "limits": [
+    {
+      "id": "plan",
+      "name": "CodingPass",
+      "capabilities": [
+        "web"
+      ],
+      "settingsView": "setup",
+      "credentials": {
+        "validation": true,
+        "fields": [
+          {
+            "id": "cookie",
+            "label": {
+              "en": "Console Cookie header",
+              "zh-CN": "控制台 Cookie 请求头",
+              "zh-TW": "控制台 Cookie 請求標頭"
+            },
+            "control": "textarea",
+            "required": true
+          }
+        ]
+      }
+    }
+  ],
+  "presentation": {
+    "icon": {
+      "data": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3QgeD0iMi41IiB5PSI2LjUiIHdpZHRoPSIyNyIgaGVpZ2h0PSIxOSIgcng9IjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTEwIDE2aDExTTE2IDExIDIxIDE2IDE2IDIxIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+",
+      "mode": "mask"
+    },
+    "color": {
+      "hex": "#ff5a1f"
+    }
+  },
+  "engines": {
+    "tokenMonitor": ">=0.88.0"
+  },
+  "identityIcon": "data:image/png;base64,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"
+}
