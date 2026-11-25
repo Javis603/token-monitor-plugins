@@ -96,6 +96,28 @@ test('uncapped windows become notes; idle 5h window has no reset time', () => {
   assert.equal(idle.windows[0].resetsAt, undefined);
 });
 
+test('a zero allowance is an exhausted window, not an uncapped one', () => {
+  const quota = { ...USAGE.quota, limit5hMicro: 0, limitWeekMicro: 0, limitMicro: 0, used5hMicro: 0, usedWeekMicro: 0, usedMicro: 0 };
+  const global = USAGE.live.global.map(entry => ({ ...entry, usedMicro: 0, limitMicro: 0 }));
+  const reading = parseUsage({ ...USAGE, quota, live: { ...USAGE.live, global } }, null, { locale: 'en' });
+  assert.deepEqual(reading.windows.map(w => [w.kind, w.used, w.limit, w.usedPercent]),
+    [['session', 0, 0, 100], ['weekly', 0, 0, 100], ['billing', 0, 0, 100]]);
+  assert.ok(!(reading.notes || []).some(n => n.value === 'No cap'));
+  const left = reading.windows[0].infoRows.find(row => row.label === 'Left');
+  assert.deepEqual(left.value, { amount: 0, currency: 'USD' });
+  // A capped window keeps the host-derived percentage.
+  assert.equal(parseUsage(USAGE, null).windows[0].usedPercent, undefined);
+});
+
+test('a live zero does not override an explicitly uncapped quota; a live cap still fills in', () => {
+  const live = { ...USAGE.live, global: USAGE.live.global.map(e => e.layer === 'global_5h' ? { ...e, limitMicro: 0 } : e) };
+  const uncapped = parseUsage({ ...USAGE, quota: { ...USAGE.quota, limit5hMicro: null }, live }, null, { locale: 'en' });
+  assert.deepEqual(uncapped.windows.map(w => w.kind), ['weekly', 'billing']);
+  assert.ok(uncapped.notes.some(n => n.label === '5-hour' && n.value === 'No cap'));
+  const filled = parseUsage({ ...USAGE, quota: { ...USAGE.quota, limit5hMicro: null } }, null);
+  assert.deepEqual(filled.windows[0].limit, 10);
+});
+
 test('no subscription yields an informative note', () => {
   const reading = parseUsage({ subscription: null, quota: null, live: null }, null, { locale: 'en' });
   assert.deepEqual(reading.windows, []);
@@ -137,6 +159,9 @@ test('readings pass the Token Monitor host normalizers', { skip: !REPO && 'TOKEN
   }
   const p = parseUsage(USAGE, WALLET).windows.map(w => normalizeLimitWindow(w).usedPercent);
   assert.deepEqual(p, [25, 25, 40]);
+  const empty = parseUsage({ ...USAGE, quota: { ...USAGE.quota, limit5hMicro: 0 }, live: null }, null);
+  assert.equal(normalizeLimitWindow(empty.windows[0]).usedPercent, 100);
+  assert.equal(normalizeLimitWindow(empty.windows[0]).remainingPercent, 0);
 });
 
 test('manifest and package pass the host validator', { skip: !REPO && 'TOKEN_MONITOR_HOST not set' }, () => {

@@ -9,7 +9,8 @@
 //   usage.subscription { status, planName, planCode, periodEnd, quotaResetCredits, ... }
 //   wallet        { balanceMicro, monthSpentMicro, rateBps, paygEnabled }
 // All money values are USD micro-units (1 USD = 1e6), formatted by the site as
-// `$${(micro / 1e6).toFixed(2)}`. A null limit means the window has no cap.
+// `$${(micro / 1e6).toFixed(2)}`. A null limit means the window has no cap;
+// a zero limit means the plan grants nothing in that window (fully used).
 
 const MICRO = 1e6;
 
@@ -76,6 +77,8 @@ function buildWindow({ kind, label, usedMicro, limitMicro, resetsAt, span, local
   const used = Math.max(0, usedMicro ?? 0);
   return {
     kind, label, used: usd(used), limit: usd(limitMicro), currency: 'USD',
+    // The host cannot derive a percentage from a zero cap; nothing is available.
+    ...(limitMicro > 0 ? {} : { usedPercent: 100 }),
     ...(resetsAt ? { resetsAt, boundaryKind: 'reset' } : {}),
     span,
     infoRows: [
@@ -99,19 +102,28 @@ function parseUsage(usage, wallet, { locale = 'en' } = {}) {
   const uncapped = [];
 
   if (quota && typeof quota === 'object') {
+    // Prefer the settled quota cap, then the live counter's. A live zero must not
+    // turn a window the quota explicitly reports as uncapped (null) into an empty one.
+    const cap = (field, live) => {
+      const settled = num(quota[field]), current = num(live?.limitMicro);
+      if (settled !== null) return settled;
+      return current !== null && current <= 0 && Object.hasOwn(quota, field) ? null : current;
+    };
     const specs = [
       { kind: 'session', label: '5-hour', name: 'window5h', used: num(g5h?.usedMicro) ?? num(quota.used5hMicro),
-        limit: num(quota.limit5hMicro) ?? num(g5h?.limitMicro),
+        limit: cap('limit5hMicro', g5h),
         // The 5-hour window only has a reset time once a request has started it.
         reset: live?.window5hStartAt && g5h ? iso(g5h.resetAt) : null, idle: Boolean(live) && !live.window5hStartAt },
       { kind: 'weekly', label: 'Weekly', name: 'windowWeek', used: num(gWeek?.usedMicro) ?? num(quota.usedWeekMicro),
-        limit: num(quota.limitWeekMicro) ?? num(gWeek?.limitMicro), reset: iso(gWeek?.resetAt) },
+        limit: cap('limitWeekMicro', gWeek), reset: iso(gWeek?.resetAt) },
       { kind: 'billing', label: 'Monthly', name: 'windowMonth', used: num(gMonth?.usedMicro) ?? num(quota.usedMicro),
-        limit: num(quota.limitMicro) ?? num(gMonth?.limitMicro), reset: iso(gMonth?.resetAt) ?? iso(quota.monthEnd) }
+        limit: cap('limitMicro', gMonth), reset: iso(gMonth?.resetAt) ?? iso(quota.monthEnd) }
     ];
-    const capped = specs.filter(spec => spec.limit !== null && spec.limit > 0);
+    // Only null is the uncapped sentinel; zero (or a stray negative) is an empty allowance.
+    for (const spec of specs) if (spec.limit !== null) spec.limit = Math.max(0, spec.limit);
+    const capped = specs.filter(spec => spec.limit !== null);
     for (const spec of specs) {
-      if (!(spec.limit !== null && spec.limit > 0)) { uncapped.push(spec); continue; }
+      if (spec.limit === null) { uncapped.push(spec); continue; }
       // Two short windows share a row; the monthly allowance takes a full row.
       const span = spec.kind === 'billing' || capped.length === 1 ? 2 : 1;
       const window = buildWindow({ kind: spec.kind, label: spec.label, usedMicro: spec.used, limitMicro: spec.limit, resetsAt: spec.reset, span, locale });
